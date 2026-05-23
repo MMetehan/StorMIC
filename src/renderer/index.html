@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StorMIC</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="titlebar-left">
+      <span id="conn-dot" class="conn-dot" title="Bağlantı durumu"></span>
+      <span class="titlebar-title">StorMIC</span>
+    </div>
+    <div class="titlebar-controls">
+      <button onclick="window.electron.minimize()">&#x2212;</button>
+      <button onclick="window.electron.maximize()">&#x25A1;</button>
+      <button class="close" onclick="window.electron.close()">&#x2715;</button>
+    </div>
+  </div>
+
+  <!-- Kullanıcı adı -->
+  <div id="screen-username" class="screen active">
+    <div class="card">
+      <h1 class="logo">StorMIC</h1>
+      <p class="subtitle">Kullanıcı adını gir</p>
+      <input id="input-username" type="text" placeholder="Kullanıcı adı" maxlength="24" autocomplete="off" spellcheck="false" />
+      <button id="btn-username-confirm" class="btn-primary">Devam</button>
+    </div>
+  </div>
+
+  <!-- Kanal seç -->
+  <div id="screen-channel" class="screen">
+    <div class="card">
+      <h1 class="logo">StorMIC</h1>
+      <p class="subtitle" id="welcome-text"></p>
+      <div class="channel-actions">
+        <button id="btn-create" class="btn-primary">Kanal Oluştur</button>
+        <div class="divider">ya da</div>
+        <div class="join-row">
+          <input id="input-code" type="text" placeholder="Kanal kodu (örn. XK9F2A)" maxlength="6" autocomplete="off" spellcheck="false" />
+          <button id="btn-join" class="btn-secondary">Katıl</button>
+        </div>
+        <p id="join-error" class="join-error"></p>
+      </div>
+
+      <!-- Sunucu ayarı -->
+      <div class="server-setting">
+        <button id="btn-toggle-server" class="server-toggle">&#x2699; Sunucu ayarı</button>
+        <div id="server-setting-body" class="server-setting-body hidden">
+          <input id="input-signal-url-channel" type="text" placeholder="wss://..." autocomplete="off" spellcheck="false" />
+          <button id="btn-save-url-channel" class="btn-secondary" style="white-space:nowrap">Kaydet</button>
+        </div>
+        <p id="url-save-feedback" class="copy-feedback"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Oluşturulan kod -->
+  <div id="screen-created" class="screen">
+    <div class="card">
+      <h1 class="logo">StorMIC</h1>
+      <p class="subtitle">Kanal oluşturuldu</p>
+      <p class="hint">Bu kodu arkadaşlarınla paylaş</p>
+      <div class="code-display">
+        <span id="created-code"></span>
+        <button id="btn-copy" class="btn-icon" title="Kopyala">&#x2398;</button>
+      </div>
+      <p id="copy-feedback" class="copy-feedback"></p>
+      <button id="btn-enter-channel" class="btn-primary">Kanala Gir</button>
+    </div>
+  </div>
+
+  <!-- Oda -->
+  <div id="screen-room" class="screen">
+    <!-- Dosya sürükle-bırak overlay -->
+    <div id="drop-overlay" class="drop-overlay">
+      <div class="drop-label">Dosyayı bırak</div>
+    </div>
+
+    <div class="room-layout">
+      <aside class="sidebar">
+        <div class="channel-info">
+          <span class="channel-label">Kanal</span>
+          <span id="room-code-display" class="channel-code-badge"></span>
+          <button id="btn-copy-room-code" class="btn-icon-sm" title="Kopyala">&#x2398;</button>
+        </div>
+        <div class="participants-label">Katılımcılar</div>
+        <ul id="participants-list" class="participants"></ul>
+        <!-- Ses kısma popover'ı -->
+        <div id="volume-popover" class="volume-popover hidden">
+          <div class="volume-popover-name" id="volume-popover-name"></div>
+          <div class="volume-popover-row">
+            <span class="volume-icon">🔊</span>
+            <input id="volume-slider" type="range" min="0" max="100" step="5" value="100" />
+            <span id="volume-val" class="volume-val">100%</span>
+          </div>
+          <button id="btn-volume-mute" class="btn-toggle">Sustur</button>
+        </div>
+        <button id="btn-leave" class="btn-leave">Kanaldan Ayrıl</button>
+      </aside>
+
+      <main class="chat-area">
+        <!-- Video area — aktif video yokken gizli -->
+        <div id="video-area" class="video-area">
+          <div id="video-spotlight" class="video-spotlight">
+            <video id="spotlight-video" autoplay playsinline></video>
+            <div id="spotlight-label" class="spotlight-label"></div>
+            <button id="btn-fullscreen" class="btn-fullscreen" title="Tam ekran">&#x26F6;</button>
+            <button id="btn-mirror" class="btn-mirror hidden" title="Ayna modu">&#x21C6;</button>
+          </div>
+          <div id="video-strip" class="video-strip"></div>
+        </div>
+
+        <div id="messages" class="messages"></div>
+        <div class="input-bar">
+          <label class="btn-attach" title="Dosya ekle">
+            <input id="file-input" type="file" multiple hidden />
+            &#x1F4CE;
+          </label>
+          <div class="emoji-wrap">
+            <button id="btn-emoji" class="btn-attach" title="Emoji">&#x1F600;</button>
+            <div id="emoji-picker" class="emoji-picker hidden"></div>
+          </div>
+          <input id="msg-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" />
+          <button id="btn-send" class="btn-send">&#x27A4;</button>
+        </div>
+      </main>
+    </div>
+
+    <div class="controls-bar">
+      <!-- Ayarlar paneli — controls-bar içinde, absolute konumlanır -->
+      <div id="settings-panel" class="settings-panel hidden">
+        <div class="settings-header">
+          <span>Ayarlar</span>
+          <button id="btn-settings-close" class="settings-close">&#x2715;</button>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Ses</div>
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:4px">
+            <span class="settings-row-label">Giriş Aygıtı</span>
+            <select id="sel-input-device" class="settings-select"><option value="">Varsayılan</option></select>
+          </div>
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:4px">
+            <span class="settings-row-label">Çıkış Aygıtı</span>
+            <select id="sel-output-device" class="settings-select"><option value="">Varsayılan</option></select>
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">Gürültü Engelleme</span>
+            <button id="btn-noise-supp" class="btn-toggle active">Açık</button>
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">Yankı Azaltma</span>
+            <button id="btn-echo-cancel" class="btn-toggle active">Açık</button>
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">Oto. Kazanım</span>
+            <button id="btn-agc" class="btn-toggle">Kapalı</button>
+          </div>
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="settings-row-label">Konuşma Eşiği</span>
+              <span id="threshold-val" class="threshold-val">8</span>
+            </div>
+            <input id="range-threshold" type="range" min="3" max="30" step="1" value="8" />
+          </div>
+        </div>
+        <div class="settings-section" style="padding-top:0">
+          <div class="settings-section-title">Sunucu</div>
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
+            <span class="settings-row-label">Sinyal Sunucusu URL</span>
+            <div style="display:flex;gap:6px">
+              <input id="input-signal-url" type="text" placeholder="ws://..." style="flex:1;font-size:12px;padding:6px 10px" />
+              <button id="btn-save-url" class="btn-rebind" style="white-space:nowrap">Kaydet</button>
+            </div>
+          </div>
+        </div>
+        <div class="settings-section" style="padding-top:0">
+          <div class="settings-section-title">Tuş Atamaları</div>
+          <div class="settings-row">
+            <span class="settings-row-label">Bas-Konuş (PTT)</span>
+            <div class="keybind-row">
+              <kbd id="ptt-key-display"></kbd>
+              <button id="btn-rebind-ptt" class="btn-rebind">Değiştir</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">Mikrofon Aç/Kapat</span>
+            <div class="keybind-row">
+              <kbd id="mic-key-display">—</kbd>
+              <button id="btn-rebind-mic" class="btn-rebind">Değiştir</button>
+              <button id="btn-clear-mic" class="btn-rebind" title="Kaldır">&#x2715;</button>
+            </div>
+          </div>
+          <p class="settings-hint">Klavye tuşu veya fare yan düğmesi atanabilir.</p>
+        </div>
+      </div>
+
+      <div class="controls-group">
+        <button id="btn-ptt"    class="ctrl-btn" title="Bas-Konuş">&#x1F3A4; PTT</button>
+        <button id="btn-mic"    class="ctrl-btn" title="Mikrofon">&#x1F507; Mikrofon</button>
+        <button id="btn-cam"    class="ctrl-btn" title="Kamera">&#x1F4F7; Kamera</button>
+
+        <!-- Ekran paylaşım butonu + seçenek popover'ı -->
+        <div class="ctrl-popover-wrap" id="screen-wrap">
+          <div id="screen-options" class="ctrl-popover hidden">
+            <div class="popover-row">
+              <span class="popover-label">Çözünürlük</span>
+              <div class="opt-group">
+                <button class="opt-btn active" data-res="1280" data-h="720">720p</button>
+                <button class="opt-btn"        data-res="1920" data-h="1080">1080p</button>
+              </div>
+            </div>
+            <div class="popover-row">
+              <span class="popover-label">FPS</span>
+              <div class="opt-group">
+                <button class="opt-btn active" data-fps="30">30 fps</button>
+                <button class="opt-btn"        data-fps="60">60 fps</button>
+              </div>
+            </div>
+            <button id="btn-start-screen" class="btn-primary" style="margin-top:4px;padding:8px 0;font-size:13px">Paylaşmayı Başlat</button>
+          </div>
+          <button id="btn-screen" class="ctrl-btn" title="Ekran Paylaş">&#x1F5A5; Ekran</button>
+        </div>
+      </div>
+      <button id="btn-settings" class="ctrl-btn-icon" title="Ayarlar">&#x2699;</button>
+    </div>
+  </div>
+
+  <script src="signal-url.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

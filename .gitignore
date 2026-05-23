@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Build-time secrets — never commit these
+.env
+src/renderer/signal-url.js
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# electron-builder cache
+.cache/
