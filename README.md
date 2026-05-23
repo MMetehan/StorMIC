@@ -1,6 +1,8 @@
 # StorMIC — Desktop Voice & Chat App
 
 > **[English](#english) | [Türkçe](#türkçe)**
+>
+> ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
 ---
 
@@ -216,6 +218,12 @@ All user preferences are stored in `localStorage`:
 | `stormic_echo_cancellation` | `true` | Echo cancellation toggle |
 | `stormic_agc` | `false` | Auto gain control toggle |
 | `stormic_speak_threshold` | `8` | Speaking detection sensitivity |
+
+---
+
+### License
+
+[MIT](LICENSE) © 2026 StorMIC
 
 ---
 
@@ -436,3 +444,9 @@ Tüm kullanıcı tercihleri `localStorage`'da saklanır:
 | `stormic_echo_cancellation` | `true` | Yankı azaltma |
 | `stormic_agc` | `false` | Otomatik kazanım kontrolü |
 | `stormic_speak_threshold` | `8` | Konuşma tespiti hassasiyeti |
+
+---
+
+### Lisans
+
+[MIT](LICENSE) © 2026 StorMIC
