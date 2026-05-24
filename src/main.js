@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require('electron');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 let pendingScreenShare = null;
@@ -23,6 +24,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Güncelleme kontrolü (sadece paketlenmiş build'de çalışır, dev'de görmezden gelir)
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     const cfg = pendingScreenShare;
     pendingScreenShare = null;
@@ -44,6 +49,22 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+// ── Otomatik güncelleme ───────────────────────────────────────
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('update-available', () => {
+  mainWindow?.webContents.send('update-status', 'downloading');
+});
+
+autoUpdater.on('update-downloaded', () => {
+  mainWindow?.webContents.send('update-status', 'ready');
+});
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall();
 });
 
 // Pencere kontrolleri (frameless)

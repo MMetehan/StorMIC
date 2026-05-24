@@ -23,6 +23,39 @@ body {
   user-select: none;
 }
 
+/* ── Güncelleme banner'ı ── */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: #2a6a3a;
+  border-bottom: 1px solid #3ba55c;
+  font-size: 13px;
+  color: #d4f5de;
+}
+.update-banner.hidden { display: none; }
+.update-install {
+  background: var(--success);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.update-install.hidden { display: none; }
+.update-dismiss {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #a8d8b8;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
 /* ── Titlebar ── */
 .titlebar {
   height: var(--titlebar-h);
@@ -540,6 +573,14 @@ input[type="text"]::placeholder { color: var(--text-muted); }
 }
 .ctrl-btn:hover { background: var(--border); color: var(--text); }
 .ctrl-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ctrl-btn.deaf-active {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+  box-shadow: 0 0 10px rgba(237, 66, 69, 0.4);
+}
+.ctrl-btn.deaf-active:hover { background: #c93537; border-color: #c93537; }
+.ctrl-btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
 .ctrl-btn.ptt-active {
   background: var(--success);
   color: #fff;

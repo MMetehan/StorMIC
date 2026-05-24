@@ -8,6 +8,13 @@
 </head>
 <body>
 
+  <!-- Güncelleme bildirimi -->
+  <div id="update-banner" class="update-banner hidden">
+    <span id="update-msg">Güncelleme indiriliyor...</span>
+    <button id="btn-install-update" class="update-install hidden">Yeniden başlat &amp; güncelle</button>
+    <button id="btn-dismiss-update" class="update-dismiss">&#x2715;</button>
+  </div>
+
   <!-- Titlebar -->
   <div class="titlebar">
     <div class="titlebar-left">
@@ -111,7 +118,7 @@
           <div class="volume-popover-name" id="volume-popover-name"></div>
           <div class="volume-popover-row">
             <span class="volume-icon">🔊</span>
-            <input id="volume-slider" type="range" min="0" max="100" step="5" value="100" />
+            <input id="volume-slider" type="range" min="0" max="200" step="5" value="100" />
             <span id="volume-val" class="volume-val">100%</span>
           </div>
           <button id="btn-volume-mute" class="btn-toggle">Sustur</button>
@@ -223,6 +230,7 @@
       <div class="controls-group">
         <button id="btn-ptt"    class="ctrl-btn" title="Bas-Konuş">&#x1F3A4; PTT</button>
         <button id="btn-mic"    class="ctrl-btn" title="Mikrofon">&#x1F507; Mikrofon</button>
+        <button id="btn-deaf"   class="ctrl-btn" title="Kulaklığı Kapat">&#x1F3A7; Kulaklık</button>
         <button id="btn-cam"    class="ctrl-btn" title="Kamera">&#x1F4F7; Kamera</button>
 
         <!-- Ekran paylaşım butonu + seçenek popover'ı -->

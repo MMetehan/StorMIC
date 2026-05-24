@@ -12,6 +12,15 @@ const RTC_CONFIG = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turns:openrelay.metered.ca:443',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
 };
 
@@ -80,6 +89,92 @@ function getAudioConstraints() {
 // username -> HTMLAudioElement (uzak ses)
 const remoteAudio = new Map();
 
+// username -> GainNode (100% üzeri ses için Web Audio zinciri)
+const remoteGains = new Map();
+
+let _sharedAudioCtx = null;
+function sharedAudioContext() {
+  if (!_sharedAudioCtx || _sharedAudioCtx.state === 'closed') {
+    _sharedAudioCtx = new AudioContext();
+  }
+  if (_sharedAudioCtx.state === 'suspended') _sharedAudioCtx.resume().catch(() => {});
+  return _sharedAudioCtx;
+}
+
+function ensureGainNode(username, audioEl) {
+  if (remoteGains.has(username)) return remoteGains.get(username);
+  const ctx = sharedAudioContext();
+  const src = ctx.createMediaElementSource(audioEl);
+  const gain = ctx.createGain();
+  gain.gain.value = Math.max(0, remoteVolumes.get(username) ?? 1);
+  src.connect(gain);
+  gain.connect(ctx.destination);
+  audioEl.volume = 1;
+  remoteGains.set(username, gain);
+  return gain;
+}
+
+function cleanupRemoteGain(username) {
+  const gain = remoteGains.get(username);
+  if (gain) {
+    try { gain.disconnect(); } catch {}
+    remoteGains.delete(username);
+  }
+}
+
+// ── Sağır modu (kulaklık kapalı) ─────────────────────────────
+let deafened = false;
+const preDeafVolumes = new Map(); // ses seviyeleri geri yüklemek için
+
+function applyDeafState() {
+  if (deafened) {
+    remoteAudio.forEach((el, key) => {
+      const gain = remoteGains.get(key);
+      if (gain) {
+        preDeafVolumes.set(key, gain.gain.value);
+        gain.gain.value = 0;
+      } else {
+        preDeafVolumes.set(key, el.volume);
+        el.volume = 0;
+      }
+    });
+  } else {
+    remoteAudio.forEach((el, key) => {
+      const saved = preDeafVolumes.get(key) ?? (remoteVolumes.get(key) ?? 1);
+      const gain = remoteGains.get(key);
+      if (gain) {
+        gain.gain.value = Math.max(0, saved);
+      } else {
+        el.volume = Math.max(0, Math.min(1, saved));
+      }
+    });
+    preDeafVolumes.clear();
+  }
+}
+
+function setDeafened(val) {
+  deafened = val;
+  if (deafened) {
+    if (mic.mode !== 'off') {
+      disableMic();
+      btnMic.classList.remove('active');
+      btnMic.textContent = '🔇 Mikrofon';
+    }
+    btnPtt.disabled = true;
+    btnMic.disabled = true;
+    btnDeaf.classList.add('deaf-active');
+    btnDeaf.textContent = '🔕 Kulaklık';
+    btnDeaf.title = 'Kulaklığı Aç';
+  } else {
+    btnPtt.disabled = false;
+    btnMic.disabled = false;
+    btnDeaf.classList.remove('deaf-active');
+    btnDeaf.textContent = '🎧 Kulaklık';
+    btnDeaf.title = 'Kulaklığı Kapat';
+  }
+  applyDeafState();
+}
+
 // ── Yeniden bağlanma durumu ───────────────────────────────────
 const reconn = { timer: null, attempts: 0 };
 
@@ -109,6 +204,9 @@ function doReconnect() {
   peers.clear();
   remoteAudio.forEach(el => { el.srcObject = null; });
   remoteAudio.clear();
+  remoteGains.forEach(g => { try { g.disconnect(); } catch {} });
+  remoteGains.clear();
+  preDeafVolumes.clear();
   [...videoTiles.keys()].filter(id => id.startsWith('remote-')).forEach(removeVideoTile);
   document.getElementById('participants-list').innerHTML = '';
   // Yeniden bağlan
@@ -223,6 +321,8 @@ document.getElementById('btn-leave').addEventListener('click', leaveRoom);
 function leaveRoom() {
   if (reconn.timer) { clearTimeout(reconn.timer); reconn.timer = null; }
   reconn.attempts = 0;
+  deafened = false;
+  preDeafVolumes.clear();
   disableMic();
   disableCamera();
   disableScreenShare();
@@ -230,6 +330,8 @@ function leaveRoom() {
   peers.clear();
   remoteAudio.forEach(el => { el.srcObject = null; });
   remoteAudio.clear();
+  remoteGains.forEach(g => { try { g.disconnect(); } catch {} });
+  remoteGains.clear();
   [...videoTiles.keys()].forEach(removeVideoTile);
   if (state.ws) { state.ws.close(); state.ws = null; }
   state.channelCode = null;
@@ -239,12 +341,20 @@ function leaveRoom() {
 }
 
 // ── Ses seviyesi ──────────────────────────────────────────────
-const remoteVolumes = new Map(); // username → 0-1
+const remoteVolumes = new Map(); // username → 0-2 (2.0 = %200)
 
 function setRemoteVolume(username, vol) {
   remoteVolumes.set(username, vol);
+  if (deafened) return; // deaf modda gerçek sesi değiştirme, sadece kaydet
   const el = remoteAudio.get(username);
-  if (el) el.volume = vol;
+  if (!el) return;
+  if (vol > 1) ensureGainNode(username, el);
+  const gain = remoteGains.get(username);
+  if (gain) {
+    gain.gain.value = Math.max(0, vol);
+  } else {
+    el.volume = Math.max(0, Math.min(1, vol));
+  }
 }
 
 // ── Volume popover ────────────────────────────────────────────
@@ -391,6 +501,7 @@ function createPeerConnection(remoteUsername, initiator) {
     peers.get(username).pc.close();
     peers.delete(username);
     removeParticipant(username);
+    cleanupRemoteGain(username);
     remoteAudio.get(username)?.remove();
     remoteAudio.delete(username);
     const screenKey = `${username}-screen`;
@@ -410,9 +521,11 @@ function createPeerConnection(remoteUsername, initiator) {
         // İlk ses track'i = mikrofon
         const audioEl = new Audio();
         audioEl.autoplay = true;
-        audioEl.volume = remoteVolumes.get(remoteUsername) ?? 1;
+        const storedVol = remoteVolumes.get(remoteUsername) ?? 1;
+        audioEl.volume = deafened ? 0 : Math.min(1, storedVol);
         remoteAudio.set(remoteUsername, audioEl);
         audioEl.srcObject = stream;
+        if (!deafened && storedVol > 1) ensureGainNode(remoteUsername, audioEl);
       } else {
         // Ekstra ses track'i = muhtemelen ekran sesi; mesaj eşleşmesini bekle
         const peer = peers.get(remoteUsername);
@@ -487,14 +600,23 @@ function handleSignal({ from, data }) {
       const peer = peers.get(from);
       const { pc } = peer;
 
-      // Çakışma kontrolü (glare): biz de offer üretiyorsak ve initiator'sak, yabancı offer'ı yoksay
+      // Çakışma kontrolü: initiator (impolite) → gelen offer'ı yoksay
       const collision = peer.makingOffer || pc.signalingState !== 'stable';
       if (collision && peer.initiator) return;
 
-      pc.setRemoteDescription(data.sdp)
-        .then(() => pc.createAnswer())
-        .then(answer => pc.setLocalDescription(answer).then(() => answer))
-        .then(answer => sendSignal(from, { type: 'answer', sdp: answer }));
+      // Non-initiator (polite) → çakışmada kendi offer'ımızı geri çek, gelen offer'ı işle
+      (async () => {
+        try {
+          if (collision) {
+            try { await pc.setLocalDescription({ type: 'rollback' }); } catch {}
+            peer.makingOffer = false;
+          }
+          await pc.setRemoteDescription(data.sdp);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          sendSignal(from, { type: 'answer', sdp: pc.localDescription });
+        } catch {}
+      })();
       break;
     }
     case 'answer': {
@@ -715,6 +837,17 @@ function connectSignaling() {
       intent: joinIntent,
     }));
     addParticipant(state.username, true);
+
+    // Kanala ilk katılımda mikrofonu otomatik aç
+    if (!deafened && mic.mode === 'off') {
+      enableMic().then(ok => {
+        if (!ok) return;
+        mic.mode = 'open';
+        setMicEnabled(true);
+        btnMic.classList.add('active');
+        btnMic.textContent = '🎙️ Mikrofon';
+      });
+    }
   });
 
   ws.addEventListener('message', ({ data }) => {
@@ -743,6 +876,7 @@ function connectSignaling() {
         remoteAudio.get(leftScreenKey)?.srcObject && (remoteAudio.get(leftScreenKey).srcObject = null);
         remoteAudio.delete(leftScreenKey);
         remoteVolumes.delete(msg.username);
+        cleanupRemoteGain(msg.username);
         updateScreenAudioVol();
         [...videoTiles.keys()]
           .filter(id => id.startsWith(`remote-${msg.username}-`))
@@ -1073,15 +1207,22 @@ document.addEventListener('mousedown', (e) => {
 // ── Kontrol butonları ─────────────────────────────────────────
 const btnPtt    = document.getElementById('btn-ptt');
 const btnMic    = document.getElementById('btn-mic');
+const btnDeaf   = document.getElementById('btn-deaf');
 const btnCam    = document.getElementById('btn-cam');
 const btnScreen = document.getElementById('btn-screen');
 
 function resetControlButtons() {
   [btnPtt, btnMic, btnCam, btnScreen].forEach(b => b.classList.remove('active', 'ptt-active'));
+  btnPtt.disabled = false;
+  btnMic.disabled = false;
+  btnDeaf.classList.remove('deaf-active');
+  btnDeaf.textContent = '🎧 Kulaklık';
+  btnDeaf.title = 'Kulaklığı Kapat';
 }
 
 // Mikrofon toggle (açık mikrofon modu)
 btnMic.addEventListener('click', async () => {
+  if (deafened) return;
   if (mic.mode === 'open') {
     disableMic();
     btnMic.classList.remove('active');
@@ -1102,7 +1243,7 @@ btnMic.addEventListener('click', async () => {
 
 // PTT aktifleştir / bırak
 async function activatePtt() {
-  if (rebindTarget) return;
+  if (rebindTarget || deafened) return;
   if (mic.mode === 'open') return;
   if (!mic.stream) {
     const ok = await enableMic();
@@ -1119,6 +1260,9 @@ function deactivatePtt() {
   btnPtt.classList.remove('ptt-active');
 }
 
+// Kulaklık toggle
+btnDeaf.addEventListener('click', () => setDeafened(!deafened));
+
 // PTT butonu (fare)
 btnPtt.addEventListener('mousedown', activatePtt);
 btnPtt.addEventListener('mouseup',    deactivatePtt);
@@ -1130,8 +1274,7 @@ document.addEventListener('keydown', (e) => {
   if (document.activeElement?.tagName === 'INPUT') return;
   // Mikrofon toggle
   if (micToggleBinding?.type === 'key' && e.code === micToggleBinding.code && !e.repeat) {
-    e.preventDefault();
-    btnMic.click();
+    if (!deafened) { e.preventDefault(); btnMic.click(); }
     return;
   }
   if (pttBinding.type !== 'key' || e.code !== pttBinding.code || e.repeat) return;
@@ -1809,3 +1952,25 @@ dropOverlay.addEventListener('drop', e => {
   dropOverlay.classList.remove('visible');
   sendFiles(e.dataTransfer.files);
 });
+
+// ── Otomatik güncelleme bildirimi ─────────────────────────────
+if (window.electron?.onUpdateStatus) {
+  const updateBanner  = document.getElementById('update-banner');
+  const updateMsg     = document.getElementById('update-msg');
+  const btnInstall    = document.getElementById('btn-install-update');
+  const btnDismiss    = document.getElementById('btn-dismiss-update');
+
+  window.electron.onUpdateStatus(status => {
+    updateBanner.classList.remove('hidden');
+    if (status === 'downloading') {
+      updateMsg.textContent = 'Güncelleme indiriliyor...';
+      btnInstall.classList.add('hidden');
+    } else if (status === 'ready') {
+      updateMsg.textContent = 'Yeni sürüm hazır!';
+      btnInstall.classList.remove('hidden');
+    }
+  });
+
+  btnInstall.addEventListener('click', () => window.electron.installUpdate());
+  btnDismiss.addEventListener('click', () => updateBanner.classList.add('hidden'));
+}
