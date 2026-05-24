@@ -1012,20 +1012,52 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  width: 288px;
-  max-height: 230px;
-  overflow-y: auto;
+  width: 310px;
+  height: 320px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   z-index: 400;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.emoji-picker.hidden { display: none; }
+
+.emoji-cat-bar {
+  display: flex;
+  gap: 2px;
+  padding: 6px 6px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.emoji-cat-bar::-webkit-scrollbar { display: none; }
+.emoji-cat-btn {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  padding: 3px 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.1s, background 0.1s;
+}
+.emoji-cat-btn:hover  { background: var(--border); opacity: 1; }
+.emoji-cat-btn.active { background: var(--border); opacity: 1; }
+
+.emoji-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   gap: 2px;
+  align-content: start;
 }
-.emoji-picker.hidden { display: none; }
 .emoji-btn {
   background: transparent;
   border: none;
@@ -1038,6 +1070,108 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
   text-align: center;
 }
 .emoji-btn:hover { background: var(--border); }
+
+/* ── GIF picker ── */
+.gif-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.btn-gif {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 7px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  height: 32px;
+}
+.btn-gif:hover { color: var(--text); background: var(--border); }
+.gif-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 320px;
+  height: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.gif-picker.hidden { display: none; }
+.gif-search-wrap {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.gif-search-wrap input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
+}
+.gif-search-wrap input:focus { border-color: var(--accent); }
+.gif-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  align-content: start;
+}
+.gif-item {
+  cursor: pointer;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--border);
+  aspect-ratio: 4/3;
+  transition: opacity 0.15s;
+}
+.gif-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gif-item:hover { opacity: 0.75; }
+.gif-status {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 12px;
+  font-size: 13px;
+  grid-column: 1 / -1;
+}
+.gif-powered {
+  text-align: center;
+  padding: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Chat GIF ── */
+.chat-gif {
+  max-width: 260px;
+  max-height: 180px;
+  border-radius: 6px;
+  display: block;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.chat-gif:hover { opacity: 0.9; }
 
 /* ── Mirror butonu ── */
 .btn-mirror {

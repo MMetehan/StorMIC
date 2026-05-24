@@ -638,6 +638,9 @@ function handleControlMessage(msg, from) {
     case 'chat':
       appendChatMessage(msg.username, msg.text);
       break;
+    case 'chat-gif':
+      appendGifMessage(msg.username, msg.url);
+      break;
     case 'speaking':
       setSpeaking(from, msg.active);
       break;
@@ -1896,41 +1899,163 @@ document.getElementById('file-input').addEventListener('change', e => {
 });
 
 // ── Emoji picker ──────────────────────────────────────────────
-const EMOJIS = [
-  '😀','😁','😂','🤣','😃','😄','😅','😆','😊',
-  '😍','🥰','😘','🥹','😇','🤩','🥳','😎','🤗',
-  '🤔','🤨','🙄','😏','😒','😑','🫠','😶','🤐',
-  '😢','😭','😤','😠','🤬','😡','🥺','😩','😫',
-  '🤢','🤮','🥵','🥶','😱','😨','🤯','🥴','😵',
-  '😜','🤪','😛','😝','🫡','🫢','🤫','🤭','😬',
-  '👍','👎','👋','✌️','🤞','🤙','👌','🤌','🙏',
-  '💪','🤝','🫶','☝️','🫵','👊','🤜','🤛','👀',
-  '❤️','🧡','💛','💚','💙','💜','🖤','💔','❤️‍🔥',
-  '🔥','💯','🎉','🎊','✅','❌','⚡','💥','💫',
-  '🚀','🎮','🏆','🎯','💡','🔑','🎵','🎶','🧠',
-  '💀','👻','🤖','👾','🦄','🌈','☀️','🌙','⭐',
+const EMOJI_CATEGORIES = [
+  { icon: '😀', label: 'Yüzler', emojis: [
+    '😀','😁','😂','🤣','😃','😄','😅','😆','😇','😈','👿',
+    '😉','😊','😋','😌','😍','🥰','😘','😗','😙','😚',
+    '🤩','🥳','😎','🤓','🧐','😐','😑','😶','🫥','😏',
+    '😒','🙄','😬','🤥','😔','😪','😴','🤤','🥱','😷',
+    '🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','😵‍💫',
+    '🤯','🤠','🥸','🤡','🤫','🤭','🫢','🫣','🤔','🫠',
+    '😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭',
+    '😤','😠','😡','🤬','💀','☠️','💩','😱','😨','😰',
+    '😥','😓','🤗','🫡','🫶','😮','😯','😲','😸','😹',
+    '😺','😻','😼','😽','🙀','😿','😾','👻','👽','🤖',
+    '👾','🎃','🫀','🫁','🧠','👁️','👅','👄','🫦',
+  ]},
+  { icon: '👋', label: 'El & Beden', emojis: [
+    '👍','👎','👊','✊','🤛','🤜','🤞','✌️','🤟','🤘',
+    '🤙','👈','👉','👆','👇','☝️','🫵','👋','🤚','🖐️',
+    '✋','🖖','👌','🤌','🤏','🫰','🫳','🫴','🙌','👏',
+    '🤝','🙏','✍️','💅','🫵','💪','🦾','🦿','🦵','🦶',
+    '👂','🦻','👃','👀','👁️','🫀','🫁','🧠','🦷','🦴',
+    '💋','👄','🫦','👅','💪','🤳','🙋','🙆','🙅','💁',
+    '🤦','🤷','🙇','🧏','💆','💇','🚶','🧍','🧎','🏃',
+  ]},
+  { icon: '🐶', label: 'Hayvanlar', emojis: [
+    '🐶','🐱','🐭','🐹','🐰','🦊','🦝','🐻','🐼','🐻‍❄️',
+    '🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊',
+    '🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗',
+    '🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🦟',
+    '🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑',
+    '🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈',
+    '🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏',
+    '🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖',
+    '🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓',
+    '🦃','🦤','🦚','🦜','🦢','🕊️','🐇','🦡','🦫','🦦',
+    '🦥','🐁','🐀','🐿️','🦔','🐾','🐉','🐲','🌵','🎄',
+  ]},
+  { icon: '🍕', label: 'Yiyecek', emojis: [
+    '🍎','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍑',
+    '🍒','🍍','🥭','🥥','🥝','🍅','🫒','🥑','🥦','🥬',
+    '🌽','🌶️','🫑','🥒','🧅','🧄','🥔','🍠','🥜','🫘',
+    '🍞','🥐','🥖','🫓','🧀','🥚','🍳','🧇','🥞','🧈',
+    '🍖','🍗','🥩','🥓','🍔','🍟','🌭','🍕','🫔','🌮',
+    '🌯','🥙','🧆','🍛','🍜','🍝','🍣','🍱','🍘','🍙',
+    '🍚','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭','🍬',
+    '🍫','🍩','🍪','🌰','🍦','🍨','🍧','🧃','🥤','🧋',
+    '☕','🍵','🫖','🍺','🍻','🥂','🍷','🥃','🍸','🍹',
+    '🧉','🍾','🧊','🥄','🍴','🍽️','🥢','🫙',
+  ]},
+  { icon: '⚽', label: 'Spor & Eğlence', emojis: [
+    '⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱',
+    '🏓','🏸','🥅','⛳','🎣','🤿','🎿','🛷','🥌','🎯',
+    '🪃','🏋️','🤼','🤸','⛹️','🤺','🤾','🏊','🚴','🧘',
+    '🎮','🕹️','🎲','♟️','🎭','🎨','🖼️','🎰','🎳','🎪',
+    '🎤','🎧','🎼','🎵','🎶','🎸','🎹','🥁','🪘','🎷',
+    '🎺','🪗','🎻','🪕','🎬','🎥','🎞️','🎠','🎡','🎢',
+    '🏆','🥇','🥈','🥉','🏅','🎖️','🏵️','🎗️','🎫','🎟️',
+    '🎪','🤹','🎭','🎨','🖌️','🖍️','✏️','📝',
+  ]},
+  { icon: '✈️', label: 'Seyahat', emojis: [
+    '🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐',
+    '🛻','🚚','🚛','🚜','🛵','🏍️','🚲','🛴','🛺','🚁',
+    '✈️','🛫','🛬','🚀','🛸','🛩️','⛵','🚢','🛳️','⛴️',
+    '🚂','🚃','🚆','🚇','🚊','🚝','🚄','🚅','🛤️','⛽',
+    '🗺️','🧭','🏔️','⛰️','🌋','🏕️','🏖️','🏜️','🏝️','🏟️',
+    '🏛️','🏗️','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨',
+    '🏩','🏪','🏫','🏭','🏯','🏰','💒','🗼','🗽','⛪',
+    '🕌','🛕','🕍','⛩️','🎑','🌁','🌃','🏙️','🌄','🌅',
+    '🌆','🌇','🌉','🗺️','🧳','⛺','🎡','🎢','🎠',
+  ]},
+  { icon: '🌿', label: 'Doğa', emojis: [
+    '🌸','🌺','🌻','🌹','🥀','🌷','💐','🌱','🪴','🌿',
+    '☘️','🍀','🎍','🎋','🍃','🍂','🍁','🌾','🎄','🌴',
+    '🌲','🌳','🪵','🪨','🌵','🐚','🪸','🌊','💧','🔥',
+    '☀️','🌤️','⛅','🌥️','🌦️','🌧️','⛈️','🌩️','🌨️','❄️',
+    '⛄','🌬️','💨','🌪️','🌫️','🌈','☂️','⚡','🌑','🌒',
+    '🌓','🌔','🌕','🌖','🌗','🌘','🌙','🌚','🌛','🌜',
+    '🌝','🌞','⭐','🌟','💫','✨','🌠','☄️','🌌','🪐',
+    '🌍','🌎','🌏','🗻','🏔️','🌋','🌁','🌀','🌈','⛅',
+  ]},
+  { icon: '💡', label: 'Nesneler', emojis: [
+    '📱','💻','⌨️','🖥️','🖨️','🖱️','💽','💾','💿','📀',
+    '📷','📸','📹','📼','☎️','📞','📟','📠','📺','📻',
+    '🧭','⌚','⏱️','⏰','🕰️','⏳','⌛','📡','🔋','🔌',
+    '💡','🔦','🕯️','🪔','🧯','💰','💴','💵','💶','💷',
+    '💸','💳','🪙','💎','⚖️','🪜','🔧','🔨','⚒️','🛠️',
+    '⛏️','🔩','🪛','🔑','🗝️','🔐','🔏','🔓','🔒','🗑️',
+    '🧲','💊','🩹','🩺','🩻','🪥','🧴','🧷','🧹','🧺',
+    '🧻','🚿','🛁','🧼','🫧','📦','📬','📮','✏️','📝',
+    '📄','📊','📈','📉','📋','📁','📂','📚','📖','🔖',
+    '🏷️','🧸','🪆','🖼️','🧩','🎁','🎀','🎈','🎊','🎉',
+    '🎆','🎇','🧨','✨','🎍','🎋','🎃','🎄','🎑','🎐',
+  ]},
+  { icon: '💯', label: 'Semboller', emojis: [
+    '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔',
+    '❤️‍🔥','❤️‍🩹','💕','💞','💓','💗','💖','💘','💝','💟',
+    '❣️','💯','✅','❌','❎','⭕','🔴','🟠','🟡','🟢',
+    '🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔸','🔹','🔺',
+    '🔻','💠','🔘','🔳','🔲','🔥','💥','💢','💨','💦',
+    '💧','✨','⭐','🌟','💫','⚡','🎉','🎊','🎈','🏆',
+    '🥇','🎯','🚩','🏴','🏳️','🚫','⛔','📵','🔞','🔕',
+    '🔇','🔈','🔉','🔊','📢','📣','🔔','🔕','🃏','🀄',
+    '🎴','🔮','🪬','🧿','♻️','🔁','🔂','▶️','⏸️','⏹️',
+    '⏺️','⏭️','⏮️','⏩','⏪','🔀','🔃','🔄','📶','📳',
+    '📴','📵','💤','🆗','🆙','🆒','🆕','🆓','🆖','🅰️',
+    '🅱️','🆎','🆑','🅾️','🆘','⚠️','🚸','🆚','🉐','🈹',
+  ]},
 ];
 
 const emojiPicker = document.getElementById('emoji-picker');
 const btnEmoji    = document.getElementById('btn-emoji');
 
-EMOJIS.forEach(emoji => {
-  const btn = document.createElement('button');
-  btn.className = 'emoji-btn';
-  btn.textContent = emoji;
-  btn.addEventListener('click', () => {
-    const pos = msgInput.selectionStart ?? msgInput.value.length;
-    const val = msgInput.value;
-    msgInput.value = val.slice(0, pos) + emoji + val.slice(pos);
-    msgInput.selectionStart = msgInput.selectionEnd = pos + emoji.length;
-    msgInput.focus();
+// Kategori çubuğu oluştur
+const emojiCatBar = document.createElement('div');
+emojiCatBar.className = 'emoji-cat-bar';
+const emojiGrid = document.createElement('div');
+emojiGrid.className = 'emoji-grid';
+
+function renderEmojiGrid(emojis) {
+  emojiGrid.innerHTML = '';
+  emojis.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-btn';
+    btn.textContent = emoji;
+    btn.addEventListener('click', () => {
+      const pos = msgInput.selectionStart ?? msgInput.value.length;
+      const val = msgInput.value;
+      msgInput.value = val.slice(0, pos) + emoji + val.slice(pos);
+      msgInput.selectionStart = msgInput.selectionEnd = pos + emoji.length;
+      msgInput.focus();
+    });
+    emojiGrid.appendChild(btn);
   });
-  emojiPicker.appendChild(btn);
+}
+
+EMOJI_CATEGORIES.forEach((cat, idx) => {
+  const btn = document.createElement('button');
+  btn.className = 'emoji-cat-btn' + (idx === 0 ? ' active' : '');
+  btn.textContent = cat.icon;
+  btn.title = cat.label;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    emojiCatBar.querySelectorAll('.emoji-cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderEmojiGrid(cat.emojis);
+  });
+  emojiCatBar.appendChild(btn);
 });
+
+emojiPicker.appendChild(emojiCatBar);
+emojiPicker.appendChild(emojiGrid);
+renderEmojiGrid(EMOJI_CATEGORIES[0].emojis);
 
 btnEmoji.addEventListener('click', (e) => {
   e.stopPropagation();
+  const willOpen = emojiPicker.classList.contains('hidden');
   emojiPicker.classList.toggle('hidden');
+  if (willOpen) gifPicker.classList.add('hidden');
 });
 
 document.addEventListener('click', (e) => {
@@ -1940,6 +2065,92 @@ document.addEventListener('click', (e) => {
     emojiPicker.classList.add('hidden');
   }
 });
+
+// ── GIF picker ────────────────────────────────────────────────
+const GIPHY_KEY = 'dc6zaTOxFJmzC';
+const gifPicker  = document.getElementById('gif-picker');
+const btnGif     = document.getElementById('btn-gif');
+const gifSearch  = document.getElementById('gif-search');
+const gifGrid    = document.getElementById('gif-grid');
+let   gifSearchTimer = null;
+
+btnGif.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const willOpen = gifPicker.classList.contains('hidden');
+  gifPicker.classList.toggle('hidden');
+  if (willOpen) {
+    emojiPicker.classList.add('hidden');
+    gifSearch.value = '';
+    gifSearch.focus();
+    loadGifs('');
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!gifPicker.classList.contains('hidden') &&
+      !gifPicker.contains(e.target) &&
+      e.target !== btnGif) {
+    gifPicker.classList.add('hidden');
+  }
+});
+
+gifSearch.addEventListener('keydown', e => e.stopPropagation());
+gifSearch.addEventListener('input', () => {
+  clearTimeout(gifSearchTimer);
+  gifSearchTimer = setTimeout(() => loadGifs(gifSearch.value.trim()), 450);
+});
+
+async function loadGifs(query) {
+  gifGrid.innerHTML = '<div class="gif-status">Yükleniyor...</div>';
+  try {
+    const endpoint = query
+      ? `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(query)}&limit=20`
+      : `https://api.giphy.com/v1/gifs/trending?limit=20`;
+    const res  = await fetch(`${endpoint}&api_key=${GIPHY_KEY}&rating=pg-13`);
+    const json = await res.json();
+    gifGrid.innerHTML = '';
+    const gifs = json.data ?? [];
+    if (!gifs.length) {
+      gifGrid.innerHTML = '<div class="gif-status">Sonuç yok.</div>';
+      return;
+    }
+    gifs.forEach(g => {
+      const thumb = g.images?.fixed_height_small?.url || g.images?.downsized_small?.url;
+      const send  = g.images?.downsized?.url || g.images?.original?.url;
+      if (!thumb || !send) return;
+      const item = document.createElement('div');
+      item.className = 'gif-item';
+      const img = document.createElement('img');
+      img.src = thumb;
+      img.alt = g.title || 'GIF';
+      img.loading = 'lazy';
+      item.appendChild(img);
+      item.addEventListener('click', () => {
+        gifPicker.classList.add('hidden');
+        broadcastControl({ type: 'chat-gif', username: state.username, url: send });
+        appendGifMessage(state.username, send, true);
+      });
+      gifGrid.appendChild(item);
+    });
+  } catch {
+    gifGrid.innerHTML = '<div class="gif-status">Yüklenemedi.</div>';
+  }
+}
+
+function appendGifMessage(author, url, isSelf = false) {
+  const time  = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const color = usernameColor(author);
+  const div   = document.createElement('div');
+  div.className = 'message';
+  div.innerHTML = `
+    <div class="meta">
+      <span class="name" style="color:${color}">${escapeHtml(author)}${isSelf ? ' <span class="self-tag">(sen)</span>' : ''}</span>
+      <span class="time">${time}</span>
+    </div>
+    <div class="body"><img src="${escapeHtml(url)}" class="chat-gif" alt="GIF" loading="lazy" /></div>`;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
 
 const dropOverlay = document.getElementById('drop-overlay');
 const roomScreen  = document.getElementById('screen-room');
