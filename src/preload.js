@@ -5,4 +5,6 @@ contextBridge.exposeInMainWorld('electron', {
   maximize:  () => ipcRenderer.send('window-maximize'),
   close:     () => ipcRenderer.send('window-close'),
   signalUrl: process.env.STORMIC_SIGNAL_URL || '',
+  getSources:          ()    => ipcRenderer.invoke('desktop-capturer-sources'),
+  setScreenShareConfig: cfg  => ipcRenderer.send('screen-share-config', cfg),
 });

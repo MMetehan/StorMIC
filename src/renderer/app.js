@@ -117,10 +117,11 @@ function doReconnect() {
 
 // Video durumu
 const vid = {
-  cameraStream: null,
-  cameraTrack:  null,
-  screenStream: null,
-  screenTrack:  null,
+  cameraStream:     null,
+  cameraTrack:      null,
+  screenStream:     null,
+  screenTrack:      null,
+  screenAudioTrack: null,
 };
 
 // tileId -> HTMLElement (video tile)
@@ -169,6 +170,12 @@ function confirmUsername() {
 
 document.getElementById('btn-username-confirm').addEventListener('click', confirmUsername);
 inputUsername.addEventListener('keydown', e => { if (e.key === 'Enter') confirmUsername(); });
+
+document.getElementById('btn-edit-username').addEventListener('click', () => {
+  showScreen('screen-username');
+  inputUsername.select();
+  inputUsername.focus();
+});
 
 // ── Ekran 2: Kanal oluştur / katıl ───────────────────────────
 document.getElementById('btn-create').addEventListener('click', () => {
@@ -336,9 +343,10 @@ function createPeerConnection(remoteUsername, initiator) {
   peers.set(remoteUsername, peerState);
 
   // Mevcut track'leri ekle
-  if (mic.track && mic.stream)           pc.addTrack(mic.track, mic.stream);
+  if (mic.track && mic.stream)             pc.addTrack(mic.track, mic.stream);
   if (vid.cameraTrack && vid.cameraStream) pc.addTrack(vid.cameraTrack, vid.cameraStream);
   if (vid.screenTrack && vid.screenStream) pc.addTrack(vid.screenTrack, vid.screenStream);
+  if (vid.screenAudioTrack && vid.screenStream) pc.addTrack(vid.screenAudioTrack, vid.screenStream);
 
   // Renegotiation (örn. yeni track eklendiğinde)
   pc.onnegotiationneeded = async () => {
@@ -360,6 +368,10 @@ function createPeerConnection(remoteUsername, initiator) {
 
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
+    if (s === 'connected' && vid.screenTrack) {
+      const sender = pc.getSenders().find(se => se.track?.id === vid.screenTrack?.id);
+      if (sender) applyBitrate(sender, screenMaxBps());
+    }
     if (s === 'failed') {
       // ICE yeniden başlatmayı dene
       if (!peerState.iceRestarted && peerState.initiator) {
@@ -381,6 +393,9 @@ function createPeerConnection(remoteUsername, initiator) {
     removeParticipant(username);
     remoteAudio.get(username)?.remove();
     remoteAudio.delete(username);
+    const screenKey = `${username}-screen`;
+    remoteAudio.get(screenKey)?.srcObject && (remoteAudio.get(screenKey).srcObject = null);
+    remoteAudio.delete(screenKey);
     [...videoTiles.keys()]
       .filter(id => id.startsWith(`remote-${username}-`))
       .forEach(removeVideoTile);
@@ -390,14 +405,23 @@ function createPeerConnection(remoteUsername, initiator) {
   // Gelen ses/video track'leri
   pc.ontrack = ({ track, streams }) => {
     if (track.kind === 'audio') {
-      let audioEl = remoteAudio.get(remoteUsername);
-      if (!audioEl) {
-        audioEl = new Audio();
+      const stream = streams[0] ?? new MediaStream([track]);
+      if (!remoteAudio.has(remoteUsername)) {
+        // İlk ses track'i = mikrofon
+        const audioEl = new Audio();
         audioEl.autoplay = true;
         audioEl.volume = remoteVolumes.get(remoteUsername) ?? 1;
         remoteAudio.set(remoteUsername, audioEl);
+        audioEl.srcObject = stream;
+      } else {
+        // Ekstra ses track'i = muhtemelen ekran sesi; mesaj eşleşmesini bekle
+        const peer = peers.get(remoteUsername);
+        if (peer) {
+          if (!peer.pendingAudioTracks) peer.pendingAudioTracks = new Map();
+          peer.pendingAudioTracks.set(track.id, { track, stream });
+          resolveScreenAudio(peer, remoteUsername);
+        }
       }
-      audioEl.srcObject = streams[0] ?? new MediaStream([track]);
       return;
     }
     if (track.kind === 'video') {
@@ -437,9 +461,10 @@ function createPeerConnection(remoteUsername, initiator) {
 
 function setupDataChannel(dc, remoteUsername) {
   dc.onopen = () => {
-    // Yeni bağlanan peer'a aktif video stream'lerini bildir
+    // Yeni bağlanan peer'a aktif video/ses stream'lerini bildir
     if (vid.cameraTrack) dc.send(JSON.stringify({ type: 'video-track', trackId: vid.cameraTrack.id, kind: 'camera' }));
     if (vid.screenTrack) dc.send(JSON.stringify({ type: 'video-track', trackId: vid.screenTrack.id, kind: 'screen' }));
+    if (vid.screenAudioTrack) dc.send(JSON.stringify({ type: 'screen-audio-track', trackId: vid.screenAudioTrack.id }));
   };
   dc.onmessage = ({ data }) => {
     if (typeof data === 'string') {
@@ -514,6 +539,19 @@ function handleControlMessage(msg, from) {
       removeVideoTile(`remote-${from}-${msg.kind}`);
       break;
     }
+    case 'screen-audio-track': {
+      const peer = peers.get(from);
+      if (!peer) break;
+      peer.pendingScreenAudioId = msg.trackId;
+      resolveScreenAudio(peer, from);
+      break;
+    }
+    case 'screen-audio-stop': {
+      const screenKey = `${from}-screen`;
+      const el = remoteAudio.get(screenKey);
+      if (el) { el.srcObject = null; remoteAudio.delete(screenKey); }
+      break;
+    }
     case 'file-meta': {
       const peer = peers.get(from);
       if (peer) {
@@ -556,17 +594,57 @@ function broadcastControl(msg) {
   });
 }
 
-// ── Bağlantı kalitesi ─────────────────────────────────────────
+// ── Bitrate yardımcıları ──────────────────────────────────────
+function screenMaxBps() {
+  if (screenCfg.width >= 1920) return 8_000_000;
+  if (screenCfg.width >= 1280) return 4_000_000;
+  return 2_000_000;
+}
+
+async function applyBitrate(sender, bps) {
+  const params = sender.getParameters();
+  if (!params.encodings?.length) params.encodings = [{}];
+  params.encodings[0].maxBitrate = bps;
+  await sender.setParameters(params).catch(() => {});
+}
+
+// ── Ekran sesi eşleştirme ─────────────────────────────────────
+function resolveScreenAudio(peer, remoteUsername) {
+  if (!peer.pendingScreenAudioId || !peer.pendingAudioTracks?.size) return;
+  const pending = peer.pendingAudioTracks.get(peer.pendingScreenAudioId);
+  if (!pending) return;
+  peer.pendingAudioTracks.delete(peer.pendingScreenAudioId);
+  peer.pendingScreenAudioId = null;
+  const screenKey = `${remoteUsername}-screen`;
+  const audioEl = new Audio();
+  audioEl.autoplay = true;
+  remoteAudio.set(screenKey, audioEl);
+  audioEl.srcObject = pending.stream;
+  pending.track.onended = () => {
+    if (remoteAudio.get(screenKey) === audioEl) {
+      audioEl.srcObject = null;
+      remoteAudio.delete(screenKey);
+    }
+  };
+}
+
+// ── Bağlantı kalitesi + adaptif bitrate ───────────────────────
 async function updatePeerStats() {
   for (const [username, { pc }] of peers) {
     try {
       const stats = await pc.getStats();
       let rtt = null;
+      let videoPacketsSent = 0;
+      let videoPacketsLost = 0;
+
       stats.forEach(r => {
         if (r.type === 'candidate-pair' && r.state === 'succeeded' && r.currentRoundTripTime != null) {
           if (rtt === null || r.currentRoundTripTime < rtt) rtt = r.currentRoundTripTime;
         }
+        if (r.type === 'outbound-rtp' && r.kind === 'video') videoPacketsSent += r.packetsSent || 0;
+        if (r.type === 'remote-inbound-rtp' && r.kind === 'video') videoPacketsLost += r.packetsLost || 0;
       });
+
       const ms = rtt !== null ? rtt * 1000 : null;
       const level = ms === null ? 'unknown' : ms < 80 ? 'good' : ms < 200 ? 'medium' : 'poor';
       const colors = { good: 'var(--success)', medium: '#f0b232', poor: 'var(--danger)', unknown: 'var(--border)' };
@@ -576,6 +654,33 @@ async function updatePeerStats() {
       if (!dot) continue;
       dot.style.background = colors[level];
       dot.title = ms !== null ? `${Math.round(ms)} ms` : 'Ölçülüyor...';
+
+      // Adaptif bitrate — ekran paylaşımı aktifken
+      if (vid.screenTrack) {
+        const screenSender = pc.getSenders().find(s => s.track?.id === vid.screenTrack?.id);
+        if (screenSender) {
+          const total = videoPacketsSent + videoPacketsLost;
+          const lossRate = total > 200 ? videoPacketsLost / total : 0;
+          const max = screenMaxBps();
+          const params = screenSender.getParameters();
+          if (params.encodings?.length) {
+            const current = params.encodings[0].maxBitrate;
+            if (current === undefined) {
+              // İlk başarılı renegotiation sonrası — başlangıç bitrate'i ayarla
+              params.encodings[0].maxBitrate = max;
+              screenSender.setParameters(params).catch(() => {});
+            } else {
+              let next;
+              if (lossRate > 0.08)       next = Math.max(300_000, Math.round(current * 0.75));
+              else if (lossRate < 0.02)  next = Math.min(max, Math.round(current * 1.1));
+              if (next !== undefined && Math.abs(next - current) > 50_000) {
+                params.encodings[0].maxBitrate = next;
+                screenSender.setParameters(params).catch(() => {});
+              }
+            }
+          }
+        }
+      }
     } catch {}
   }
 }
@@ -631,6 +736,9 @@ function connectSignaling() {
         }
         remoteAudio.get(msg.username)?.remove();
         remoteAudio.delete(msg.username);
+        const leftScreenKey = `${msg.username}-screen`;
+        remoteAudio.get(leftScreenKey)?.srcObject && (remoteAudio.get(leftScreenKey).srcObject = null);
+        remoteAudio.delete(leftScreenKey);
         remoteVolumes.delete(msg.username);
         [...videoTiles.keys()]
           .filter(id => id.startsWith(`remote-${msg.username}-`))
@@ -1097,7 +1205,28 @@ const screenWrap    = document.getElementById('screen-wrap');
 const screenOptions = document.getElementById('screen-options');
 const btnStartScreen = document.getElementById('btn-start-screen');
 
-let screenCfg = { width: 1280, height: 720, fps: 30 };
+let screenCfg = { width: 1280, height: 720, fps: 30, audio: false };
+
+// Hazır ayar seçimi
+screenOptions.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    screenOptions.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const presets = {
+      presentation: { width: 1920, height: 1080, fps: 5 },
+      gaming:       { width: 1280, height: 720,  fps: 60 },
+      lowband:      { width: 854,  height: 480,  fps: 15 },
+    };
+    const p = presets[btn.dataset.preset];
+    if (p) {
+      screenCfg.width = p.width; screenCfg.height = p.height; screenCfg.fps = p.fps;
+      screenOptions.querySelectorAll('[data-res]').forEach(b =>
+        b.classList.toggle('active', Number(b.dataset.res) === p.width));
+      screenOptions.querySelectorAll('[data-fps]').forEach(b =>
+        b.classList.toggle('active', Number(b.dataset.fps) === p.fps));
+    }
+  });
+});
 
 // Çözünürlük seçimi
 screenOptions.querySelectorAll('[data-res]').forEach(btn => {
@@ -1106,6 +1235,7 @@ screenOptions.querySelectorAll('[data-res]').forEach(btn => {
     btn.classList.add('active');
     screenCfg.width  = Number(btn.dataset.res);
     screenCfg.height = Number(btn.dataset.h);
+    screenOptions.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'));
   });
 });
 
@@ -1115,8 +1245,20 @@ screenOptions.querySelectorAll('[data-fps]').forEach(btn => {
     screenOptions.querySelectorAll('[data-fps]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     screenCfg.fps = Number(btn.dataset.fps);
+    screenOptions.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('active'));
   });
 });
+
+// Sistem sesi toggle
+const btnScreenAudio = document.getElementById('btn-screen-audio');
+if (btnScreenAudio) {
+  btnScreenAudio.addEventListener('click', (e) => {
+    e.stopPropagation();
+    screenCfg.audio = !screenCfg.audio;
+    btnScreenAudio.classList.toggle('active', screenCfg.audio);
+    btnScreenAudio.textContent = screenCfg.audio ? 'Açık' : 'Kapalı';
+  });
+}
 
 btnScreen.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1138,27 +1280,89 @@ document.addEventListener('click', (e) => {
   if (!screenWrap.contains(e.target)) screenOptions.classList.add('hidden');
 });
 
+async function pickScreenSource() {
+  if (!window.electron?.getSources) return null;
+  return new Promise(resolve => {
+    const modal   = document.getElementById('source-picker-modal');
+    const grid    = document.getElementById('source-picker-grid');
+    const btnOk   = document.getElementById('btn-source-confirm');
+    const btnCancel = document.getElementById('btn-source-cancel');
+    let selectedId = null;
+
+    window.electron.getSources().then(sources => {
+      grid.innerHTML = '';
+      sources.forEach(src => {
+        const card = document.createElement('div');
+        card.className = 'source-card';
+        card.innerHTML = `<img src="${src.thumbnail}" /><div class="source-card-name">${escapeHtml(src.name)}</div>`;
+        card.addEventListener('click', () => {
+          grid.querySelectorAll('.source-card').forEach(c => c.classList.remove('active'));
+          card.classList.add('active');
+          selectedId = src.id;
+          btnOk.disabled = false;
+        });
+        grid.appendChild(card);
+      });
+      modal.classList.remove('hidden');
+    }).catch(() => resolve(null));
+
+    function cleanup() {
+      modal.classList.add('hidden');
+      grid.innerHTML = '';
+      btnOk.disabled = true;
+      btnOk.removeEventListener('click', onOk);
+      btnCancel.removeEventListener('click', onCancel);
+    }
+    function onOk()     { cleanup(); resolve(selectedId); }
+    function onCancel() { cleanup(); resolve(null); }
+    btnOk.addEventListener('click', onOk);
+    btnCancel.addEventListener('click', onCancel);
+  });
+}
+
 async function enableScreenShare() {
   try {
+    // Electron'da pencere/ekran seçici
+    if (window.electron?.getSources) {
+      const sourceId = await pickScreenSource();
+      if (!sourceId) return false;
+      window.electron.setScreenShareConfig({ sourceId, audio: screenCfg.audio });
+    }
+
     const stream = await navigator.mediaDevices.getDisplayMedia({
       video: {
         width:     { ideal: screenCfg.width },
         height:    { ideal: screenCfg.height },
         frameRate: { ideal: screenCfg.fps },
       },
-      audio: false,
+      audio: screenCfg.audio,
     });
 
     vid.screenStream = stream;
     vid.screenTrack  = stream.getVideoTracks()[0];
 
-    peers.forEach(({ pc }) => pc.addTrack(vid.screenTrack, stream));
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length > 0) vid.screenAudioTrack = audioTracks[0];
+
+    peers.forEach(({ pc }) => {
+      pc.addTrack(vid.screenTrack, stream);
+      if (vid.screenAudioTrack) pc.addTrack(vid.screenAudioTrack, stream);
+    });
     broadcastControl({ type: 'video-track', trackId: vid.screenTrack.id, kind: 'screen' });
+    if (vid.screenAudioTrack) {
+      broadcastControl({ type: 'screen-audio-track', trackId: vid.screenAudioTrack.id });
+    }
+
+    // Bağlı peer'lara bitrate uygula
+    const maxBps = screenMaxBps();
+    peers.forEach(({ pc }) => {
+      const sender = pc.getSenders().find(s => s.track?.id === vid.screenTrack?.id);
+      if (sender) applyBitrate(sender, maxBps);
+    });
 
     const tileId = 'local-screen';
     addVideoTile(tileId, state.username + ' (ekran)', stream, 'screen', true);
 
-    // Kullanıcı tarayıcıdan durdurursa
     vid.screenTrack.onended = () => {
       disableScreenShare();
       btnScreen.classList.remove('active');
@@ -1172,11 +1376,14 @@ async function enableScreenShare() {
 
 function disableScreenShare() {
   if (!vid.screenStream) return;
+  const hadAudio = vid.screenAudioTrack !== null;
   vid.screenStream.getTracks().forEach(t => t.stop());
-  vid.screenStream = null;
-  vid.screenTrack  = null;
+  vid.screenStream     = null;
+  vid.screenTrack      = null;
+  vid.screenAudioTrack = null;
   removeVideoTile('local-screen');
   broadcastControl({ type: 'video-stop', kind: 'screen' });
+  if (hadAudio) broadcastControl({ type: 'screen-audio-stop' });
 }
 
 // ── Video tile yönetimi ───────────────────────────────────────

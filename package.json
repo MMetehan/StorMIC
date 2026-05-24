@@ -4,12 +4,12 @@
   "description": "Minimal P2P voice and chat app",
   "main": "src/main.js",
   "scripts": {
-    "prestart":    "node scripts/generate-env.js",
-    "start":       "electron .",
-    "build:win":   "node scripts/generate-env.js && electron-builder --win",
-    "build:mac":   "node scripts/generate-env.js && electron-builder --mac",
+    "prestart": "node scripts/generate-env.js",
+    "start": "electron .",
+    "build:win": "node scripts/generate-env.js && electron-builder --win",
+    "build:mac": "node scripts/generate-env.js && electron-builder --mac",
     "build:linux": "node scripts/generate-env.js && electron-builder --linux",
-    "build:all":   "node scripts/generate-env.js && electron-builder --win --mac --linux"
+    "build:all": "node scripts/generate-env.js && electron-builder --win --mac --linux"
   },
   "build": {
     "appId": "com.stormic.app",
@@ -23,23 +23,48 @@
       "src/**/*"
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.ico"
     },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.social-networking"
     },
     "linux": {
-      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.png",
       "category": "Network"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["tr_TR", "en_US"],
+      "installerLanguages": [
+        "tr_TR",
+        "en_US"
+      ],
       "shortcutName": "StorMIC",
       "uninstallDisplayName": "StorMIC",
       "perMachine": false,

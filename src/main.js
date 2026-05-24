@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require('elect
 const path = require('path');
 
 let mainWindow;
+let pendingScreenShare = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -22,10 +23,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // Electron 17+ requires this handler for getDisplayMedia to work in the renderer
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
-    desktopCapturer.getSources({ types: ['screen'] }).then(sources => {
-      callback({ video: sources[0] });
+    const cfg = pendingScreenShare;
+    pendingScreenShare = null;
+    desktopCapturer.getSources({ types: ['screen', 'window'] }).then(sources => {
+      const src = (cfg?.sourceId && sources.find(s => s.id === cfg.sourceId))
+        || sources.find(s => s.id.startsWith('screen:'))
+        || sources[0];
+      const audio = (cfg?.audio && process.platform === 'win32') ? 'loopback' : undefined;
+      callback({ video: src, audio });
     });
   });
   createWindow();
@@ -45,3 +51,17 @@ ipcMain.on('window-maximize', () => {
   mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
 });
 ipcMain.on('window-close', () => mainWindow.close());
+
+// Ekran kaynağı listesi (pencere seçici için)
+ipcMain.handle('desktop-capturer-sources', async () => {
+  const sources = await desktopCapturer.getSources({
+    types: ['screen', 'window'],
+    thumbnailSize: { width: 280, height: 158 },
+  });
+  return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
+});
+
+// Renderer'ın seçtiği kaynak + ses ayarı
+ipcMain.on('screen-share-config', (_, cfg) => {
+  pendingScreenShare = cfg;
+});
