@@ -426,7 +426,7 @@ input[type="text"]::placeholder { color: var(--text-muted); }
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
   min-height: 0;
 }
@@ -719,6 +719,33 @@ kbd {
 .video-spotlight:hover .btn-fullscreen { opacity: 1; }
 .btn-fullscreen:hover { background: rgba(0, 0, 0, 0.85); }
 
+.screen-audio-vol {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 5px 10px;
+  z-index: 5;
+  -webkit-app-region: no-drag;
+}
+.screen-audio-vol.hidden { display: none; }
+.screen-audio-vol input[type=range] {
+  width: 80px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.screen-audio-pct {
+  font-size: 11px;
+  min-width: 32px;
+  color: #ccc;
+  text-align: right;
+}
+
 .video-strip {
   width: 148px;
   min-width: 148px;
@@ -944,7 +971,9 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  width: 252px;
+  width: 288px;
+  max-height: 230px;
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);

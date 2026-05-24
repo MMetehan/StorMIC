@@ -550,6 +550,7 @@ function handleControlMessage(msg, from) {
       const screenKey = `${from}-screen`;
       const el = remoteAudio.get(screenKey);
       if (el) { el.srcObject = null; remoteAudio.delete(screenKey); }
+      updateScreenAudioVol();
       break;
     }
     case 'file-meta': {
@@ -620,10 +621,12 @@ function resolveScreenAudio(peer, remoteUsername) {
   audioEl.autoplay = true;
   remoteAudio.set(screenKey, audioEl);
   audioEl.srcObject = pending.stream;
+  updateScreenAudioVol();
   pending.track.onended = () => {
     if (remoteAudio.get(screenKey) === audioEl) {
       audioEl.srcObject = null;
       remoteAudio.delete(screenKey);
+      updateScreenAudioVol();
     }
   };
 }
@@ -740,6 +743,7 @@ function connectSignaling() {
         remoteAudio.get(leftScreenKey)?.srcObject && (remoteAudio.get(leftScreenKey).srcObject = null);
         remoteAudio.delete(leftScreenKey);
         remoteVolumes.delete(msg.username);
+        updateScreenAudioVol();
         [...videoTiles.keys()]
           .filter(id => id.startsWith(`remote-${msg.username}-`))
           .forEach(removeVideoTile);
@@ -1291,10 +1295,15 @@ async function pickScreenSource() {
 
     window.electron.getSources().then(sources => {
       grid.innerHTML = '';
+      const screenSources = sources.filter(s => s.id.startsWith('screen:'));
       sources.forEach(src => {
         const card = document.createElement('div');
         card.className = 'source-card';
-        card.innerHTML = `<img src="${src.thumbnail}" /><div class="source-card-name">${escapeHtml(src.name)}</div>`;
+        const isScreen = src.id.startsWith('screen:');
+        const label = isScreen
+          ? (screenSources.length > 1 ? `Tüm Ekran ${screenSources.indexOf(src) + 1}` : 'Tüm Ekran')
+          : src.name;
+        card.innerHTML = `<img src="${src.thumbnail}" /><div class="source-card-name">${escapeHtml(label)}</div>`;
         card.addEventListener('click', () => {
           grid.querySelectorAll('.source-card').forEach(c => c.classList.remove('active'));
           card.classList.add('active');
@@ -1393,6 +1402,19 @@ const spotlightLabel = document.getElementById('spotlight-label');
 const videoStrip     = document.getElementById('video-strip');
 let   activeSpotlightId = null;
 
+function updateScreenAudioVol() {
+  const volBar = document.getElementById('screen-audio-vol');
+  if (!volBar) return;
+  const active = !!(activeSpotlightId?.endsWith('-screen') && remoteAudio.has(activeSpotlightId));
+  volBar.classList.toggle('hidden', !active);
+  if (active) {
+    const el  = remoteAudio.get(activeSpotlightId);
+    const vol = Math.round((el?.volume ?? 1) * 100);
+    document.getElementById('screen-audio-range').value = vol;
+    document.getElementById('screen-audio-val').textContent = `${vol}%`;
+  }
+}
+
 function setSpotlight(id) {
   const entry = videoTiles.get(id);
   if (!entry) return;
@@ -1405,6 +1427,7 @@ function setSpotlight(id) {
   const isLocalCam = id === 'local-camera';
   btnMirror.classList.toggle('hidden', !isLocalCam);
   spotlightVideo.style.transform = (isLocalCam && localCameraMirrored) ? 'scaleX(-1)' : '';
+  updateScreenAudioVol();
 }
 
 function updateStripVisibility() {
@@ -1455,6 +1478,15 @@ document.getElementById('btn-fullscreen').addEventListener('click', () => {
     el.requestFullscreen().catch(() => {});
   } else {
     document.exitFullscreen();
+  }
+});
+
+document.getElementById('screen-audio-range').addEventListener('input', function () {
+  const v = parseInt(this.value, 10);
+  document.getElementById('screen-audio-val').textContent = `${v}%`;
+  if (activeSpotlightId?.endsWith('-screen')) {
+    const el = remoteAudio.get(activeSpotlightId);
+    if (el) el.volume = v / 100;
   }
 });
 
@@ -1722,9 +1754,18 @@ document.getElementById('file-input').addEventListener('change', e => {
 
 // ── Emoji picker ──────────────────────────────────────────────
 const EMOJIS = [
-  '😀','😂','😍','🥹','😭','😤','🤔','😎','🤗','😴','🙄','😅',
-  '👍','👎','❤️','🔥','💯','🎉','🙏','👋','✅','❌','💀','🫡',
-  '🤝','💪','🎮','🚀','👀','🤣','😬','🥳','😇','🤯','😱','⚡',
+  '😀','😁','😂','🤣','😃','😄','😅','😆','😊',
+  '😍','🥰','😘','🥹','😇','🤩','🥳','😎','🤗',
+  '🤔','🤨','🙄','😏','😒','😑','🫠','😶','🤐',
+  '😢','😭','😤','😠','🤬','😡','🥺','😩','😫',
+  '🤢','🤮','🥵','🥶','😱','😨','🤯','🥴','😵',
+  '😜','🤪','😛','😝','🫡','🫢','🤫','🤭','😬',
+  '👍','👎','👋','✌️','🤞','🤙','👌','🤌','🙏',
+  '💪','🤝','🫶','☝️','🫵','👊','🤜','🤛','👀',
+  '❤️','🧡','💛','💚','💙','💜','🖤','💔','❤️‍🔥',
+  '🔥','💯','🎉','🎊','✅','❌','⚡','💥','💫',
+  '🚀','🎮','🏆','🎯','💡','🔑','🎵','🎶','🧠',
+  '💀','👻','🤖','👾','🦄','🌈','☀️','🌙','⭐',
 ];
 
 const emojiPicker = document.getElementById('emoji-picker');
@@ -1740,7 +1781,6 @@ EMOJIS.forEach(emoji => {
     msgInput.value = val.slice(0, pos) + emoji + val.slice(pos);
     msgInput.selectionStart = msgInput.selectionEnd = pos + emoji.length;
     msgInput.focus();
-    emojiPicker.classList.add('hidden');
   });
   emojiPicker.appendChild(btn);
 });

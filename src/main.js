@@ -30,8 +30,9 @@ app.whenReady().then(() => {
       const src = (cfg?.sourceId && sources.find(s => s.id === cfg.sourceId))
         || sources.find(s => s.id.startsWith('screen:'))
         || sources[0];
-      const audio = (cfg?.audio && process.platform === 'win32') ? 'loopback' : undefined;
-      callback({ video: src, audio });
+      const cbObj = { video: src };
+      if (cfg?.audio && process.platform === 'win32') cbObj.audio = 'loopback';
+      callback(cbObj);
     });
   });
   createWindow();
