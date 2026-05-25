@@ -1,18 +1,21 @@
 {
   "name": "stormic",
-  "version": "1.8.3",
+  "version": "1.9.0",
   "description": "Minimal P2P voice and chat app",
   "main": "src/main.js",
   "scripts": {
     "prestart": "node scripts/generate-env.js",
     "start": "electron .",
+    "bump": "npm version patch --no-git-tag-version",
+    "bump:minor": "npm version minor --no-git-tag-version",
+    "bump:major": "npm version major --no-git-tag-version",
     "build:win": "node scripts/generate-env.js && electron-builder --win",
     "build:mac": "node scripts/generate-env.js && electron-builder --mac",
     "build:linux": "node scripts/generate-env.js && electron-builder --linux",
     "build:all": "node scripts/generate-env.js && electron-builder --win --mac --linux",
-    "release:win": "node scripts/generate-env.js && electron-builder --win --publish always",
-    "release:mac": "node scripts/generate-env.js && electron-builder --mac --publish always",
-    "release:all": "node scripts/generate-env.js && electron-builder --win --mac --linux --publish always"
+    "release:win": "npm version patch --no-git-tag-version && node scripts/generate-env.js && electron-builder --win --publish always",
+    "release:mac": "npm version patch --no-git-tag-version && node scripts/generate-env.js && electron-builder --mac --publish always",
+    "release:all": "npm version patch --no-git-tag-version && node scripts/generate-env.js && electron-builder --win --mac --linux --publish always"
   },
   "build": {
     "appId": "com.stormic.app",
