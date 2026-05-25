@@ -1277,6 +1277,61 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
   flex-shrink: 0;
 }
 
+/* ── Kura kartı ── */
+.kura-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-top: 4px;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.kura-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.kura-choices {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.kura-choices-label {
+  flex-shrink: 0;
+}
+.kura-choice {
+  background: var(--border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 12px;
+  color: var(--text);
+}
+.kura-result-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.kura-winner {
+  color: var(--success);
+  background: rgba(59, 165, 92, 0.15);
+  border: 1px solid rgba(59, 165, 92, 0.35);
+  border-radius: 4px;
+  padding: 1px 8px;
+  font-weight: 700;
+}
+
 /* ── Chat GIF ── */
 .chat-gif {
   max-width: 260px;

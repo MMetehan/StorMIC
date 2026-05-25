@@ -680,6 +680,9 @@ function handleControlMessage(msg, from) {
     case 'chat-gif':
       appendGifMessage(msg.username, msg.url);
       break;
+    case 'chat-kura':
+      appendKuraMessage(msg.username, msg.choices, msg.winners);
+      break;
     case 'speaking':
       setSpeaking(from, msg.active);
       break;
@@ -1820,6 +1823,7 @@ function sendChatMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
   msgInput.value = '';
+  if (text.startsWith('/kura')) { handleKuraCommand(text); return; }
   broadcastControl({ type: 'chat', username: state.username, text });
   appendChatMessage(state.username, text, true);
 }
@@ -1887,6 +1891,81 @@ function appendSystemMessage(text) {
   const div = document.createElement('div');
   div.className = 'message system';
   div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// ── Kura sistemi ─────────────────────────────────────────────
+function drawWinners(choices, count) {
+  const pool    = [...choices];
+  const winners = [];
+  for (let i = 0; i < count; i++) {
+    const range = pool.length * 1000;
+    const roll  = Math.floor(Math.random() * range);
+    const idx   = Math.floor(roll / 1000);
+    winners.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return winners;
+}
+
+function handleKuraCommand(text) {
+  const arg = text.slice('/kura'.length).trim();
+
+  if (!arg || arg === 'help' || arg === 'yardım') {
+    appendSystemMessage('── /kura Kullanımı ──────────────────────────');
+    appendSystemMessage('/kura seçenek1, seçenek2, seçenek3');
+    appendSystemMessage('/kura seçenek1, seçenek2, seçenek3 --- 2   (birden fazla kazanan)');
+    appendSystemMessage('Örnek: /kura Ali, Veli, Ayşe --- 2');
+    return;
+  }
+
+  const parts        = arg.split('---');
+  const choicesPart  = parts[0].trim();
+  const countPart    = parts[1]?.trim();
+  const winnerCount  = Math.max(1, parseInt(countPart) || 1);
+  const choices      = choicesPart.split(',').map(c => c.trim()).filter(Boolean);
+
+  if (choices.length < 2) {
+    appendSystemMessage('Kura için en az 2 seçenek gerekli.');
+    return;
+  }
+  if (winnerCount >= choices.length) {
+    appendSystemMessage(`Kazanan sayısı (${winnerCount}) seçenek sayısından (${choices.length}) az olmalı.`);
+    return;
+  }
+
+  const winners = drawWinners(choices, winnerCount);
+  broadcastControl({ type: 'chat-kura', username: state.username, choices, winners });
+  appendKuraMessage(state.username, choices, winners, true);
+}
+
+function appendKuraMessage(author, choices, winners, isSelf = false) {
+  const time  = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const color = usernameColor(author);
+  const div   = document.createElement('div');
+  div.className = 'message';
+
+  const choicesHtml = choices.map(c =>
+    `<span class="kura-choice${winners.includes(c) ? ' kura-winner' : ''}">${escapeHtml(c)}</span>`
+  ).join('');
+
+  const winnersHtml = winners.map(w =>
+    `<span class="kura-winner">🏆 ${escapeHtml(w)}</span>`
+  ).join('');
+
+  div.innerHTML = `
+    <div class="meta">
+      <span class="name" style="color:${color}">${escapeHtml(author)}${isSelf ? ' <span class="self-tag">(sen)</span>' : ''}</span>
+      <span class="time">${time}</span>
+    </div>
+    <div class="body">
+      <div class="kura-card">
+        <div class="kura-header">🎲 Kura Çekildi</div>
+        <div class="kura-choices"><span class="kura-choices-label">Havuz:</span> ${choicesHtml}</div>
+        <div class="kura-result-row">${winners.length > 1 ? `${winners.length} Kazanan:` : 'Kazanan:'} ${winnersHtml}</div>
+      </div>
+    </div>`;
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
