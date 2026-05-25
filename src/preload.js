@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('electron', {
   setScreenShareConfig: cfg   => ipcRenderer.send('screen-share-config', cfg),
   installUpdate:        ()    => ipcRenderer.send('install-update'),
   onUpdateStatus:       (cb)  => ipcRenderer.on('update-status', (_, status) => cb(status)),
+  openExternal:         (url) => ipcRenderer.send('open-external', url),
+  fetchOg:              (url) => ipcRenderer.invoke('fetch-og', url),
 });

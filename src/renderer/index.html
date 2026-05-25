@@ -162,10 +162,13 @@
               <div id="gif-grid" class="gif-grid">
                 <div class="gif-status">Yükleniyor...</div>
               </div>
-              <div class="gif-powered">Powered by GIPHY</div>
+              <div class="gif-powered">Powered by Tenor</div>
             </div>
           </div>
-          <input id="msg-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" />
+          <div class="msg-input-wrap">
+            <div id="mention-popup" class="mention-popup hidden"></div>
+            <input id="msg-input" type="text" placeholder="Mesaj yaz..." autocomplete="off" />
+          </div>
           <button id="btn-send" class="btn-send">&#x27A4;</button>
         </div>
       </main>
@@ -220,14 +223,14 @@
         </div>
         <div class="settings-section" style="padding-top:0">
           <div class="settings-section-title">Tuş Atamaları</div>
-          <div class="settings-row">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
             <span class="settings-row-label">Bas-Konuş (PTT)</span>
             <div class="keybind-row">
               <kbd id="ptt-key-display"></kbd>
               <button id="btn-rebind-ptt" class="btn-rebind">Değiştir</button>
             </div>
           </div>
-          <div class="settings-row">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
             <span class="settings-row-label">Mikrofon Aç/Kapat</span>
             <div class="keybind-row">
               <kbd id="mic-key-display">—</kbd>

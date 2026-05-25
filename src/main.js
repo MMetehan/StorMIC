@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, session, shell } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -86,4 +86,35 @@ ipcMain.handle('desktop-capturer-sources', async () => {
 // Renderer'ın seçtiği kaynak + ses ayarı
 ipcMain.on('screen-share-config', (_, cfg) => {
   pendingScreenShare = cfg;
+});
+
+// Harici link (sistem tarayıcısında aç)
+ipcMain.on('open-external', (_, url) => {
+  if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+});
+
+// Link OG önizleme verisi çek
+ipcMain.handle('fetch-og', async (_, rawUrl) => {
+  if (!/^https?:\/\//i.test(rawUrl)) return null;
+  try {
+    const res = await fetch(rawUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StorMIC/1.0)' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const getMeta = prop => {
+      const a = html.match(new RegExp(`<meta[^>]+property=["']og:${prop}["'][^>]+content=["']([^"']{1,400})["']`, 'i'));
+      const b = html.match(new RegExp(`<meta[^>]+content=["']([^"']{1,400})["'][^>]+property=["']og:${prop}["']`, 'i'));
+      return (a || b)?.[1]?.trim() || null;
+    };
+    const title    = getMeta('title') || html.match(/<title[^>]*>([^<]{1,200})<\/title>/i)?.[1]?.trim() || null;
+    const description = getMeta('description');
+    const image    = getMeta('image');
+    const siteName = getMeta('site_name');
+    if (!title && !image) return null;
+    return { title, description, image, siteName };
+  } catch {
+    return null;
+  }
 });

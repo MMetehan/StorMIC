@@ -39,17 +39,55 @@ function playSound(type) {
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    const t = ctx.currentTime;
     if (type === 'join') {
-      osc.frequency.setValueAtTime(820, ctx.currentTime);
-      osc.frequency.setValueAtTime(1040, ctx.currentTime + 0.12);
-    } else {
-      osc.frequency.setValueAtTime(1040, ctx.currentTime);
-      osc.frequency.setValueAtTime(700, ctx.currentTime + 0.14);
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.frequency.setValueAtTime(820, t);
+      osc.frequency.setValueAtTime(1040, t + 0.12);
+      osc.start(t); osc.stop(t + 0.35);
+    } else if (type === 'leave') {
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.frequency.setValueAtTime(1040, t);
+      osc.frequency.setValueAtTime(700, t + 0.14);
+      osc.start(t); osc.stop(t + 0.35);
+    } else if (type === 'mic-on') {
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      osc.frequency.setValueAtTime(600, t);
+      osc.frequency.setValueAtTime(900, t + 0.14);
+      osc.start(t); osc.stop(t + 0.2);
+    } else if (type === 'mic-off') {
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      osc.frequency.setValueAtTime(900, t);
+      osc.frequency.setValueAtTime(500, t + 0.14);
+      osc.start(t); osc.stop(t + 0.2);
+    } else if (type === 'deaf-on') {
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.frequency.setValueAtTime(660, t);
+      osc.frequency.setValueAtTime(440, t + 0.08);
+      osc.frequency.setValueAtTime(580, t + 0.14);
+      osc.frequency.setValueAtTime(360, t + 0.22);
+      osc.start(t); osc.stop(t + 0.28);
+    } else if (type === 'deaf-off') {
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.frequency.setValueAtTime(440, t);
+      osc.frequency.setValueAtTime(660, t + 0.08);
+      osc.frequency.setValueAtTime(520, t + 0.14);
+      osc.frequency.setValueAtTime(760, t + 0.22);
+      osc.start(t); osc.stop(t + 0.28);
+    } else if (type === 'mention') {
+      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.frequency.setValueAtTime(1200, t);
+      osc.frequency.setValueAtTime(1600, t + 0.06);
+      osc.frequency.setValueAtTime(1200, t + 0.18);
+      osc.start(t); osc.stop(t + 0.4);
     }
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.35);
     osc.onended = () => ctx.close();
   } catch {}
 }
@@ -154,6 +192,7 @@ function applyDeafState() {
 
 function setDeafened(val) {
   deafened = val;
+  playSound(deafened ? 'deaf-on' : 'deaf-off');
   if (deafened) {
     if (mic.mode !== 'off') {
       disableMic();
@@ -1231,6 +1270,7 @@ btnMic.addEventListener('click', async () => {
     btnMic.classList.remove('active');
     btnMic.textContent = '🔇 Mikrofon';
     mic.mode = 'off';
+    playSound('mic-off');
   } else {
     // PTT stream'i zaten açıksa tekrar getUserMedia çağırmaya gerek yok
     if (!mic.stream) {
@@ -1241,6 +1281,7 @@ btnMic.addEventListener('click', async () => {
     setMicEnabled(true);
     btnMic.classList.add('active');
     btnMic.textContent = '🎙️ Mikrofon';
+    playSound('mic-on');
   }
 });
 
@@ -1757,11 +1798,23 @@ if (inputSignalUrl) {
 }
 
 // ── Chat mesajları ────────────────────────────────────────────
-const msgInput   = document.getElementById('msg-input');
-const messagesEl = document.getElementById('messages');
+const msgInput     = document.getElementById('msg-input');
+const messagesEl   = document.getElementById('messages');
+
+// Link tıklamaları sistem tarayıcısında aç
+messagesEl.addEventListener('click', e => {
+  const link = e.target.closest('.chat-link');
+  if (!link) return;
+  e.preventDefault();
+  const url = link.dataset.url;
+  if (url) window.electron?.openExternal(url);
+});
+const mentionPopup = document.getElementById('mention-popup');
 
 document.getElementById('btn-send').addEventListener('click', sendChatMessage);
-msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMessage(); });
+msgInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && mentionPopup.classList.contains('hidden')) sendChatMessage();
+});
 
 function sendChatMessage() {
   const text = msgInput.value.trim();
@@ -1771,7 +1824,50 @@ function sendChatMessage() {
   appendChatMessage(state.username, text, true);
 }
 
+function renderChatText(text) {
+  const URL_RE = /https?:\/\/[^\s]+/g;
+  const mentionize = str => str.replace(/@(\w+)/g, (_, name) => {
+    const isMe = name === state.username;
+    return `<span class="mention${isMe ? ' mention-me' : ''}" style="color:${usernameColor(name)}">@${name}</span>`;
+  });
+  let result = '';
+  let last = 0;
+  let m;
+  while ((m = URL_RE.exec(text)) !== null) {
+    result += mentionize(escapeHtml(text.slice(last, m.index)));
+    const url = m[0];
+    result += `<a class="chat-link" href="#" data-url="${escapeHtml(url)}">${escapeHtml(url)}</a>`;
+    last = m.index + url.length;
+  }
+  result += mentionize(escapeHtml(text.slice(last)));
+  return result;
+}
+
+function maybeFetchPreview(bodyEl, text) {
+  if (!window.electron?.fetchOg) return;
+  const m = text.match(/https?:\/\/[^\s]+/);
+  if (!m) return;
+  const url = m[0];
+  window.electron.fetchOg(url).then(og => {
+    if (!og) return;
+    const card = document.createElement('div');
+    card.className = 'link-preview';
+    let inner = '';
+    if (og.image) inner += `<img class="link-preview-image" src="${escapeHtml(og.image)}" alt="" loading="lazy" onerror="this.remove()" />`;
+    inner += `<div class="link-preview-body">`;
+    if (og.siteName) inner += `<div class="link-preview-site">${escapeHtml(og.siteName)}</div>`;
+    if (og.title)    inner += `<div class="link-preview-title">${escapeHtml(og.title)}</div>`;
+    if (og.description) inner += `<div class="link-preview-desc">${escapeHtml(og.description)}</div>`;
+    inner += `</div>`;
+    card.innerHTML = inner;
+    card.addEventListener('click', () => window.electron.openExternal(url));
+    bodyEl.appendChild(card);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }).catch(() => {});
+}
+
 function appendChatMessage(author, text, isSelf = false) {
+  if (!isSelf && state.username && text.includes('@' + state.username)) playSound('mention');
   const time  = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const color = usernameColor(author);
   const div   = document.createElement('div');
@@ -1781,9 +1877,10 @@ function appendChatMessage(author, text, isSelf = false) {
       <span class="name" style="color:${color}">${escapeHtml(author)}${isSelf ? ' <span class="self-tag">(sen)</span>' : ''}</span>
       <span class="time">${time}</span>
     </div>
-    <div class="body">${escapeHtml(text)}</div>`;
+    <div class="body">${renderChatText(text)}</div>`;
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  maybeFetchPreview(div.querySelector('.body'), text);
 }
 
 function appendSystemMessage(text) {
@@ -1793,6 +1890,93 @@ function appendSystemMessage(text) {
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
+
+// ── Mention popup ─────────────────────────────────────────────
+let mentionIndex   = -1;
+let mentionMatches = [];
+let mentionStartPos = -1;
+
+function getMentionInfo(input) {
+  const val = input.value;
+  const pos = input.selectionStart ?? val.length;
+  const before = val.slice(0, pos);
+  const m = before.match(/(?:^|\s)@(\w*)$/);
+  if (!m) return null;
+  return { query: m[1].toLowerCase(), start: before.lastIndexOf('@') };
+}
+
+function renderMentionPopup() {
+  mentionPopup.innerHTML = '';
+  mentionMatches.forEach((name, i) => {
+    const item = document.createElement('div');
+    item.className = 'mention-item' + (i === mentionIndex ? ' mention-active' : '');
+    const dot = document.createElement('span');
+    dot.className = 'mention-dot';
+    dot.style.background = usernameColor(name);
+    const label = document.createElement('span');
+    label.textContent = name;
+    item.appendChild(dot);
+    item.appendChild(label);
+    item.addEventListener('mousedown', e => { e.preventDefault(); insertMention(name); });
+    mentionPopup.appendChild(item);
+  });
+}
+
+function insertMention(name) {
+  const val   = msgInput.value;
+  const pos   = msgInput.selectionStart ?? val.length;
+  const before = val.slice(0, mentionStartPos);
+  const after  = val.slice(pos);
+  const space  = (after.length === 0 || after[0] === ' ') ? '' : ' ';
+  msgInput.value = before + '@' + name + space + after;
+  const newPos = before.length + 1 + name.length + space.length;
+  msgInput.selectionStart = msgInput.selectionEnd = newPos;
+  hideMentionPopup();
+  msgInput.focus();
+}
+
+function hideMentionPopup() {
+  mentionPopup.classList.add('hidden');
+  mentionMatches = [];
+  mentionIndex   = -1;
+  mentionStartPos = -1;
+}
+
+msgInput.addEventListener('input', () => {
+  const info = getMentionInfo(msgInput);
+  if (!info) { hideMentionPopup(); return; }
+  const all     = [...peers.keys()];
+  const matches = info.query ? all.filter(n => n.toLowerCase().startsWith(info.query)) : all;
+  if (!matches.length) { hideMentionPopup(); return; }
+  mentionMatches  = matches;
+  mentionIndex    = 0;
+  mentionStartPos = info.start;
+  renderMentionPopup();
+  mentionPopup.classList.remove('hidden');
+});
+
+msgInput.addEventListener('keydown', e => {
+  if (mentionPopup.classList.contains('hidden')) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    mentionIndex = (mentionIndex + 1) % mentionMatches.length;
+    renderMentionPopup();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    mentionIndex = (mentionIndex - 1 + mentionMatches.length) % mentionMatches.length;
+    renderMentionPopup();
+  } else if ((e.key === 'Tab' || e.key === 'Enter') && mentionIndex >= 0) {
+    e.preventDefault();
+    insertMention(mentionMatches[mentionIndex]);
+  } else if (e.key === 'Escape') {
+    hideMentionPopup();
+  }
+});
+
+// Popup dışına tıklanınca kapat
+document.addEventListener('click', e => {
+  if (!mentionPopup.contains(e.target) && e.target !== msgInput) hideMentionPopup();
+});
 
 // ── Dosya transferi ───────────────────────────────────────────
 function sendFiles(files) {
@@ -2067,7 +2251,7 @@ document.addEventListener('click', (e) => {
 });
 
 // ── GIF picker ────────────────────────────────────────────────
-const GIPHY_KEY = 'dc6zaTOxFJmzC';
+const TENOR_KEY = 'LIVDSRZULELA';
 const gifPicker  = document.getElementById('gif-picker');
 const btnGif     = document.getElementById('btn-gif');
 const gifSearch  = document.getElementById('gif-search');
@@ -2103,20 +2287,20 @@ gifSearch.addEventListener('input', () => {
 async function loadGifs(query) {
   gifGrid.innerHTML = '<div class="gif-status">Yükleniyor...</div>';
   try {
-    const endpoint = query
-      ? `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(query)}&limit=20`
-      : `https://api.giphy.com/v1/gifs/trending?limit=20`;
-    const res  = await fetch(`${endpoint}&api_key=${GIPHY_KEY}&rating=pg-13`);
+    const url = query
+      ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=${TENOR_KEY}&limit=20&contentfilter=medium`
+      : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=20&contentfilter=medium`;
+    const res  = await fetch(url);
     const json = await res.json();
     gifGrid.innerHTML = '';
-    const gifs = json.data ?? [];
+    const gifs = json.results ?? [];
     if (!gifs.length) {
       gifGrid.innerHTML = '<div class="gif-status">Sonuç yok.</div>';
       return;
     }
     gifs.forEach(g => {
-      const thumb = g.images?.fixed_height_small?.url || g.images?.downsized_small?.url;
-      const send  = g.images?.downsized?.url || g.images?.original?.url;
+      const thumb = g.media?.[0]?.tinygif?.url || g.media?.[0]?.gif?.url;
+      const send  = g.media?.[0]?.mediumgif?.url || g.media?.[0]?.gif?.url;
       if (!thumb || !send) return;
       const item = document.createElement('div');
       item.className = 'gif-item';
