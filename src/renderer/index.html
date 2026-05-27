@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StorMIC</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="style-base.css" />
+  <link rel="stylesheet" href="style-room.css" />
+  <link rel="stylesheet" href="style-video.css" />
+  <link rel="stylesheet" href="style-content.css" />
 </head>
 <body>
 
@@ -102,6 +105,13 @@
     <!-- Dosya sürükle-bırak overlay -->
     <div id="drop-overlay" class="drop-overlay">
       <div class="drop-label">Dosyayı bırak</div>
+    </div>
+
+    <!-- Yayın ses seviyesi overlay (yalnızca izleyiciler için) -->
+    <div id="stream-vol-overlay" class="stream-vol-overlay hidden">
+      <span class="stream-vol-icon">🔊</span>
+      <input id="stream-vol-range" type="range" min="0" max="200" step="5" value="100" />
+      <span id="stream-vol-val" class="stream-vol-val">100%</span>
     </div>
 
     <div class="room-layout">
@@ -274,6 +284,8 @@
                 <button class="opt-btn"        data-fps="15">15</button>
                 <button class="opt-btn active" data-fps="30">30</button>
                 <button class="opt-btn"        data-fps="60">60</button>
+                <button class="opt-btn"        data-fps="100">100</button>
+                <button class="opt-btn"        data-fps="120">120</button>
               </div>
             </div>
             <div class="popover-row">
@@ -290,6 +302,17 @@
   </div>
 
   <script src="signal-url.js"></script>
-  <script src="app.js"></script>
+  <script src="app-constants.js"></script>
+  <script src="app-utils.js"></script>
+  <script src="app-state.js"></script>
+  <script src="app-audio.js"></script>
+  <script src="app-peers.js"></script>
+  <script src="app-signaling.js"></script>
+  <script src="app-video.js"></script>
+  <script src="app-ui-room.js"></script>
+  <script src="app-ui-controls.js"></script>
+  <script src="app-ui-chat.js"></script>
+  <script src="app-ui-files.js"></script>
+  <script src="app-init.js"></script>
 </body>
 </html>
