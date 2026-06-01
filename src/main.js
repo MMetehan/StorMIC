@@ -98,6 +98,7 @@ ipcMain.on('open-external', (_, url) => {
 });
 
 // Link OG önizleme verisi çek
+
 ipcMain.handle('fetch-og', async (_, rawUrl) => {
   if (!/^https?:\/\//i.test(rawUrl)) return null;
   try {
