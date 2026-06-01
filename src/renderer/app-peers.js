@@ -334,19 +334,23 @@ function handleControlMessage(msg, from) {
     case 'file-meta': {
       const peer = peers.get(from);
       if (peer) {
-        const msgEl = appendFileProgressMessage(from, msg.name, msg.size);
-        peer.incoming = { id: msg.id, name: msg.name, size: msg.size, mime: msg.mime, chunks: [], received: 0, msgEl };
+        peer.incoming = { id: msg.id, name: msg.name, size: msg.size, mime: msg.mime, chunks: [], received: 0 };
       }
       break;
     }
     case 'file-done': {
       const peer = peers.get(from);
       if (peer?.incoming) {
-        const { name, mime, chunks, msgEl } = peer.incoming;
+        const { name, mime, size, chunks } = peer.incoming;
         const blob = new Blob(chunks, { type: mime || 'application/octet-stream' });
-        finalizeFileProgressMessage(msgEl, from, name, blob);
+        showReceivedFile(from, name, size, blob);
         peer.incoming = null;
       }
+      break;
+    }
+    case 'file-cancel': {
+      const peer = peers.get(from);
+      if (peer) peer.incoming = null;
       break;
     }
   }
@@ -357,13 +361,7 @@ function handleBinaryChunk(data, from) {
   if (!peer?.incoming) return;
   peer.incoming.chunks.push(data);
   peer.incoming.received += data.byteLength;
-  if (peer.incoming.size > 0 && peer.incoming.msgEl) {
-    const pct = Math.min(100, Math.round(peer.incoming.received / peer.incoming.size * 100));
-    const bar = peer.incoming.msgEl.querySelector('.file-progress-bar');
-    const pctEl = peer.incoming.msgEl.querySelector('.file-progress-pct');
-    if (bar) bar.style.width = pct + '%';
-    if (pctEl) pctEl.textContent = pct + '%';
-  }
+  // Alıcı tarafında transfer tamamlanana kadar hiçbir şey gösterilmez
 }
 
 function broadcastControl(msg) {

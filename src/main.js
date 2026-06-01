@@ -1,6 +1,11 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, session, shell, dialog } = require('electron');
 const path = require('path');
+const fs   = require('fs');
+const os   = require('os');
 const { autoUpdater } = require('electron-updater');
+
+const tempDir = path.join(os.tmpdir(), 'stormic-files');
+const tempFiles = new Set(); // uygulama kapanınca silinecek dosyalar
 
 let mainWindow;
 let pendingScreenShare = null;
@@ -95,6 +100,38 @@ ipcMain.on('screen-share-config', (_, cfg) => {
 // Harici link (sistem tarayıcısında aç)
 ipcMain.on('open-external', (_, url) => {
   if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+});
+
+// Geçici dosya yaz (uygulama kapanınca silinir)
+ipcMain.handle('save-temp-file', async (_, { name, buffer }) => {
+  try {
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    const filePath = path.join(tempDir, name);
+    fs.writeFileSync(filePath, Buffer.from(buffer));
+    tempFiles.add(filePath);
+    return filePath;
+  } catch { return null; }
+});
+
+// Kalıcı kaydet: kullanıcı kayıt yeri seçer
+ipcMain.handle('save-file-dialog', async (_, { name, buffer }) => {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: name,
+    buttonLabel: 'Kaydet',
+  });
+  if (canceled || !filePath) return false;
+  try {
+    fs.writeFileSync(filePath, Buffer.from(buffer));
+    return true;
+  } catch { return false; }
+});
+
+// Uygulama kapanınca temp dosyaları temizle
+app.on('before-quit', () => {
+  for (const f of tempFiles) {
+    try { fs.unlinkSync(f); } catch {}
+  }
+  try { fs.rmdirSync(tempDir); } catch {}
 });
 
 // Link OG önizleme verisi çek

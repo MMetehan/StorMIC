@@ -379,6 +379,125 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
 .btn-mirror.active { background: rgba(88, 101, 242, 0.7); border-color: var(--accent); }
 .btn-mirror:hover { background: rgba(0, 0, 0, 0.85); }
 
+/* ── Video dosyası ── */
+.file-video {
+  max-width: 360px;
+  max-height: 220px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  display: block;
+  margin-top: 4px;
+  background: #000;
+}
+
+/* ── Büyük dosya placeholder ── */
+.file-large-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 4px;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+}
+.file-large-preview-wrap {
+  position: relative;
+  overflow: hidden;
+  max-height: 180px;
+  background: #000;
+}
+.file-large-preview-img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  display: block;
+  filter: blur(14px);
+  transform: scale(1.08);
+  pointer-events: none;
+}
+.file-large-preview-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+.file-large-icon {
+  font-size: 40px;
+  text-align: center;
+  padding: 20px 0 8px;
+  line-height: 1;
+}
+.file-large-info {
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.file-large-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-large-size { font-size: 11px; color: var(--text-muted); }
+.file-large-desc { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.file-large-actions { margin-top: 4px; }
+.file-large-dl-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  width: 100%;
+}
+.file-large-dl-btn:hover { background: var(--accent-hover); }
+
+/* ── Dosya kaydet satırı (indir sonrası) ── */
+.file-save-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.file-save-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-save-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.file-save-btn:hover { color: var(--text); border-color: var(--text-muted); }
+.file-save-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── İptal edilmiş dosya ── */
+.file-cancelled {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 6px 0;
+}
+
 /* ── Dosya progress bar ── */
 .file-progress {
   background: var(--surface);
@@ -391,6 +510,12 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
   flex-direction: column;
   gap: 6px;
 }
+.file-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .file-progress-name {
   font-size: 13px;
   font-weight: 500;
@@ -398,7 +523,20 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
+.file-cancel-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.file-cancel-btn:hover { color: var(--danger); }
 .file-progress-bar-wrap {
   height: 4px;
   background: var(--border);

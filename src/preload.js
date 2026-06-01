@@ -11,4 +11,6 @@ contextBridge.exposeInMainWorld('electron', {
   onUpdateStatus:       (cb)  => ipcRenderer.on('update-status', (_, status) => cb(status)),
   openExternal:         (url) => ipcRenderer.send('open-external', url),
   fetchOg:              (url) => ipcRenderer.invoke('fetch-og', url),
+  saveTempFile:         (name, buffer) => ipcRenderer.invoke('save-temp-file', { name, buffer }),
+  saveFileDialog:       (name, buffer) => ipcRenderer.invoke('save-file-dialog', { name, buffer }),
 });
