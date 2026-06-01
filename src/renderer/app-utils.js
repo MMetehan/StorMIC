@@ -2,24 +2,15 @@
 
 // ── Yardımcı: kullanıcı rengi ────────────────────────────────
 function usernameColor(username) {
-  let h = 0;
-  for (let i = 0; i < username.length; i++) h = username.charCodeAt(i) + ((h << 5) - h);
+  let h = 5381;
+  for (let i = 0; i < username.length; i++) h = ((h << 5) + h) ^ username.charCodeAt(i);
   return `hsl(${Math.abs(h) % 360}, 65%, 65%)`;
 }
 
 // ── Ses efekti ────────────────────────────────────────────────
-// BUG-06: Her çağrıda yeni AudioContext yaratmak kaynak sızdırır.
-// Tek kalıcı context paylaşılır; kapatılmaz.
-let _soundCtx = null;
-function _getSoundCtx() {
-  if (!_soundCtx || _soundCtx.state === 'closed') _soundCtx = new AudioContext();
-  if (_soundCtx.state === 'suspended') _soundCtx.resume().catch(() => {});
-  return _soundCtx;
-}
-
 function playSound(type) {
   try {
-    const ctx = _getSoundCtx();
+    const ctx = sharedAudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -73,7 +64,6 @@ function playSound(type) {
       osc.frequency.setValueAtTime(1200, t + 0.18);
       osc.start(t); osc.stop(t + 0.4);
     }
-    // context paylaşıldığı için kapatılmaz
   } catch {}
 }
 
@@ -91,9 +81,9 @@ function copyToClipboard(text, feedbackEl) {
 
 function randomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let c = '';
-  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
-  return c;
+  const arr = new Uint32Array(6);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, v => chars[v % chars.length]).join('');
 }
 
 function formatBytes(b) {

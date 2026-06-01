@@ -227,7 +227,7 @@ btnMic.addEventListener('click', async () => {
 
 // PTT aktifleştir / bırak
 async function activatePtt() {
-  if (rebindTarget || deafened) return;
+  if (rebindTarget || deafened || !state.channelCode) return;
   if (mic.mode === 'open') return;
   if (!mic.stream) {
     const ok = await enableMic();

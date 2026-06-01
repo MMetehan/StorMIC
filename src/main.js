@@ -26,7 +26,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // Güncelleme kontrolü (sadece paketlenmiş build'de çalışır, dev'de görmezden gelir)
   if (app.isPackaged) {
-    autoUpdater.checkForUpdates().catch(() => {});
+    autoUpdater.checkForUpdates().catch(err => console.warn('[updater]', err.message));
   }
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     const cfg = pendingScreenShare;

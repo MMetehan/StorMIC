@@ -87,8 +87,8 @@ function createPeerConnection(remoteUsername, initiator) {
       if (audioSender) applyBitrate(audioSender, 128_000);
     }
     if (s === 'failed') {
-      // ICE yeniden başlatmayı dene
-      if (!peerState.iceRestarted && peerState.initiator) {
+      // Her iki taraf da ICE restart deneyebilir (perfect negotiation rollback mekanizması sayesinde çakışma yönetilir)
+      if (!peerState.iceRestarted) {
         peerState.iceRestarted = true;
         pc.restartIce();
         return;
@@ -375,6 +375,7 @@ function broadcastControl(msg) {
 
 // ── Bağlantı kalitesi + adaptif bitrate ───────────────────────
 async function updatePeerStats() {
+  if (peers.size === 0) return;
   for (const [username, peerState] of peers) {
     const { pc } = peerState;
     try {
@@ -441,4 +442,3 @@ function stopPeerStats() {
   if (_peerStatsTimer) { clearInterval(_peerStatsTimer); _peerStatsTimer = null; }
 }
 
-startPeerStats();

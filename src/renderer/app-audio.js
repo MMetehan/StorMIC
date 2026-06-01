@@ -221,13 +221,17 @@ function startSpeakingDetection(stream) {
   mic.audioCtx.createMediaStreamSource(stream).connect(mic.analyser);
 
   const data = new Uint8Array(mic.analyser.frequencyBinCount);
+  // İnsan sesi 80-3000 Hz → 48 kHz / 512 fftSize = ~94 Hz/bin → bin 1-32 yeterli
+  const SPEECH_END_BIN = Math.min(data.length, 33);
   mic.speakTimer = setInterval(() => {
     if (!mic.track?.enabled) {
       if (mic.isSpeaking) { mic.isSpeaking = false; broadcastSpeaking(false); setSpeaking(state.username, false); }
       return;
     }
     mic.analyser.getByteFrequencyData(data);
-    const avg = data.reduce((a, b) => a + b, 0) / data.length;
+    let sum = 0;
+    for (let i = 1; i < SPEECH_END_BIN; i++) sum += data[i];
+    const avg = sum / SPEECH_END_BIN;
     const speaking = avg > mic.speakThreshold;
     if (speaking !== mic.isSpeaking) {
       mic.isSpeaking = speaking;

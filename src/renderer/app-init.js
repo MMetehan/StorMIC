@@ -1,5 +1,9 @@
 'use strict';
 
+// Versiyon numarasını titlebar'a yaz
+const _vEl = document.getElementById('app-version');
+if (_vEl && window.__STORMIC_VERSION__) _vEl.textContent = 'v' + window.__STORMIC_VERSION__;
+
 // ── Ekran 1: Kullanıcı adı ────────────────────────────────────
 const inputUsername = document.getElementById('input-username');
 
@@ -42,8 +46,9 @@ document.getElementById('btn-copy').addEventListener('click', () => {
 document.getElementById('btn-enter-channel').addEventListener('click', enterRoom);
 
 const inputCode = document.getElementById('input-code');
+inputCode.addEventListener('input', () => { inputCode.value = inputCode.value.toUpperCase(); });
 document.getElementById('btn-join').addEventListener('click', () => {
-  const code = inputCode.value.trim().toUpperCase();
+  const code = inputCode.value.trim();
   if (code.length !== 6) return;
   joinIntent = 'join';
   state.channelCode = code;

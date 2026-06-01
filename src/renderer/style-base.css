@@ -126,6 +126,7 @@ body {
 }
 .titlebar-left { display: flex; align-items: center; gap: 7px; }
 .titlebar-title { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.titlebar-version { font-size: 10px; font-weight: 400; color: var(--border); letter-spacing: 0.3px; }
 
 /* Bağlantı durum noktası */
 .conn-dot {

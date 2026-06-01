@@ -150,7 +150,7 @@ function connectSignaling() {
   ws.addEventListener('close', () => {
     if (!state.channelCode) return; // kasıtlı ayrılma
     setConnStatus('reconnecting');
-    appendSystemMessage('Bağlantı kesildi, yeniden bağlanılıyor…');
+    appendSystemMessage(`Bağlantı kesildi, yeniden bağlanılıyor… (${reconn.attempts + 1}. deneme)`);
     scheduleReconnect();
   });
 

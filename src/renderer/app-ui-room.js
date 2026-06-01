@@ -90,14 +90,13 @@ function setSpeaking(username, active) {
 }
 
 // ── Oda ───────────────────────────────────────────────────────
-async function enterRoom() {
+function enterRoom() {
   document.getElementById('room-code-display').textContent = state.channelCode;
   document.getElementById('participants-list').innerHTML = '';
   document.getElementById('messages').innerHTML = '';
   showScreen('screen-room');
   startPeerStats();
-  // Sinyal sunucusundan güncel ICE yapılandırmasını al (TURN kimlik bilgileri dahil)
-  await loadRtcConfig(getSignalUrl());
+  loadRtcConfig(getSignalUrl()); // fire-and-forget: peer bağlantısı kurulmadan önce büyük ihtimalle tamamlanır
   connectSignaling();
 }
 

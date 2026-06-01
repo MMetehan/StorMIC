@@ -110,7 +110,7 @@ async function enableCamera() {
 
     peers.forEach((peerState) => {
       if (peerState.cameraSender) {
-        peerState.cameraSender.replaceTrack(vid.cameraTrack);
+        peerState.cameraSender.replaceTrack(vid.cameraTrack).catch(() => {});
       } else {
         peerState.cameraSender = peerState.pc.addTrack(vid.cameraTrack, stream);
         setVideoCodecPreference(peerState.pc, peerState.cameraSender);
@@ -221,14 +221,14 @@ async function enableScreenShare() {
     peers.forEach((peerState) => {
       const { pc } = peerState;
       if (peerState.screenSender) {
-        peerState.screenSender.replaceTrack(vid.screenTrack);
+        peerState.screenSender.replaceTrack(vid.screenTrack).catch(() => {});
       } else {
         peerState.screenSender = pc.addTrack(vid.screenTrack, stream);
         setVideoCodecPreference(pc, peerState.screenSender);
       }
       if (vid.screenAudioTrack) {
         if (peerState.screenAudioSender) {
-          peerState.screenAudioSender.replaceTrack(vid.screenAudioTrack);
+          peerState.screenAudioSender.replaceTrack(vid.screenAudioTrack).catch(() => {});
         } else {
           peerState.screenAudioSender = pc.addTrack(vid.screenAudioTrack, stream);
         }
