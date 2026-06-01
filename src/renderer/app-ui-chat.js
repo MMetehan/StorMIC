@@ -376,40 +376,58 @@ emojiCatBar.className = 'emoji-cat-bar';
 const emojiGrid = document.createElement('div');
 emojiGrid.className = 'emoji-grid';
 
-function renderEmojiGrid(emojis) {
-  emojiGrid.innerHTML = '';
-  emojis.forEach(emoji => {
+// Her kategori için grid içeriği bir kez oluşturulur, sonraki geçişlerde cache kullanılır
+const _emojiGridCache = new Map();
+
+function renderEmojiGrid(catIdx) {
+  if (_emojiGridCache.has(catIdx)) {
+    emojiGrid.innerHTML = '';
+    emojiGrid.appendChild(_emojiGridCache.get(catIdx));
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  EMOJI_CATEGORIES[catIdx].emojis.forEach(emoji => {
     const btn = document.createElement('button');
     btn.className = 'emoji-btn';
     btn.textContent = emoji;
-    btn.addEventListener('click', () => {
-      const pos = msgInput.selectionStart ?? msgInput.value.length;
-      const val = msgInput.value;
-      msgInput.value = val.slice(0, pos) + emoji + val.slice(pos);
-      msgInput.selectionStart = msgInput.selectionEnd = pos + emoji.length;
-      msgInput.focus();
-    });
-    emojiGrid.appendChild(btn);
+    btn.dataset.emoji = emoji;
+    frag.appendChild(btn);
   });
+  _emojiGridCache.set(catIdx, frag.cloneNode(true));
+  emojiGrid.innerHTML = '';
+  emojiGrid.appendChild(frag);
 }
+
+// Event delegation: tek listener tüm emoji button'larını yakalar
+emojiGrid.addEventListener('click', e => {
+  const btn = e.target.closest('.emoji-btn');
+  if (!btn) return;
+  const emoji = btn.dataset.emoji;
+  const pos = msgInput.selectionStart ?? msgInput.value.length;
+  const val = msgInput.value;
+  msgInput.value = val.slice(0, pos) + emoji + val.slice(pos);
+  msgInput.selectionStart = msgInput.selectionEnd = pos + emoji.length;
+  msgInput.focus();
+});
 
 EMOJI_CATEGORIES.forEach((cat, idx) => {
   const btn = document.createElement('button');
   btn.className = 'emoji-cat-btn' + (idx === 0 ? ' active' : '');
   btn.textContent = cat.icon;
   btn.title = cat.label;
+  btn.dataset.catIdx = idx;
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     emojiCatBar.querySelectorAll('.emoji-cat-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    renderEmojiGrid(cat.emojis);
+    renderEmojiGrid(idx);
   });
   emojiCatBar.appendChild(btn);
 });
 
 emojiPicker.appendChild(emojiCatBar);
 emojiPicker.appendChild(emojiGrid);
-renderEmojiGrid(EMOJI_CATEGORIES[0].emojis);
+renderEmojiGrid(0);
 
 btnEmoji.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -433,6 +451,7 @@ const btnGif     = document.getElementById('btn-gif');
 const gifSearch  = document.getElementById('gif-search');
 const gifGrid    = document.getElementById('gif-grid');
 let   gifSearchTimer = null;
+let   gifFetchController = null;
 
 btnGif.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -461,12 +480,14 @@ gifSearch.addEventListener('input', () => {
 });
 
 async function loadGifs(query) {
+  if (gifFetchController) gifFetchController.abort();
+  gifFetchController = new AbortController();
   gifGrid.innerHTML = '<div class="gif-status">Yükleniyor...</div>';
   try {
     const url = query
       ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=${TENOR_KEY}&limit=20&contentfilter=medium`
       : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=20&contentfilter=medium`;
-    const res  = await fetch(url);
+    const res  = await fetch(url, { signal: gifFetchController.signal });
     const json = await res.json();
     gifGrid.innerHTML = '';
     const gifs = json.results ?? [];
@@ -492,8 +513,8 @@ async function loadGifs(query) {
       });
       gifGrid.appendChild(item);
     });
-  } catch {
-    // BUG-27: Sadece hata mesajı yerine retry seçeneği sun
+  } catch (err) {
+    if (err.name === 'AbortError') return;
     gifGrid.innerHTML = '<div class="gif-status">Yüklenemedi. <button class="gif-retry-btn">Tekrar Dene</button></div>';
     gifGrid.querySelector('.gif-retry-btn')?.addEventListener('click', () => loadGifs(query));
   }
