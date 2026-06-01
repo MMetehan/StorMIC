@@ -135,6 +135,24 @@ input[type="range"]:hover::-webkit-slider-thumb { background: var(--accent-hover
 }
 .emoji-picker.hidden { display: none; }
 
+.emoji-search-wrap {
+  padding: 5px 6px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.emoji-search-wrap input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
+  outline: none;
+}
+.emoji-search-wrap input:focus { border-color: var(--accent); }
+.emoji-search-wrap input::placeholder { color: var(--text-muted); }
+
 .emoji-cat-bar {
   display: flex;
   gap: 2px;

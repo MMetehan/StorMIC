@@ -71,20 +71,26 @@ function maybeFetchPreview(bodyEl, text) {
   }).catch(() => {});
 }
 
-function appendChatMessage(author, text, isSelf = false) {
-  if (!isSelf && state.username && text.includes('@' + state.username)) playSound('mention');
+function buildMessageEl(author, isSelf = false) {
   const time  = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const color = usernameColor(author);
   const div   = document.createElement('div');
   div.className = 'message';
-  div.innerHTML = `
-    <div class="meta">
-      <span class="name" style="color:${color}">${escapeHtml(author)}${isSelf ? ' <span class="self-tag">(sen)</span>' : ''}</span>
-      <span class="time">${time}</span>
-    </div>
-    <div class="body">${renderChatText(text)}</div>`;
-  messagesEl.appendChild(div);
+  const selfTag = isSelf ? ' <span class="self-tag">(sen)</span>' : '';
+  div.innerHTML = `<div class="meta"><span class="name" style="color:${color}">${escapeHtml(author)}${selfTag}</span><span class="time">${time}</span></div><div class="body"></div>`;
+  return div;
+}
+
+function appendMessage(el) {
+  messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function appendChatMessage(author, text, isSelf = false) {
+  if (!isSelf && state.username && text.includes('@' + state.username)) playSound('mention');
+  const div = buildMessageEl(author, isSelf);
+  div.querySelector('.body').innerHTML = renderChatText(text);
+  appendMessage(div);
   maybeFetchPreview(div.querySelector('.body'), text);
 }
 
@@ -92,8 +98,7 @@ function appendSystemMessage(text) {
   const div = document.createElement('div');
   div.className = 'message system';
   div.textContent = text;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  appendMessage(div);
 }
 
 // ── Kura sistemi ─────────────────────────────────────────────
@@ -142,33 +147,19 @@ function handleKuraCommand(text) {
 }
 
 function appendKuraMessage(author, choices, winners, isSelf = false) {
-  const time  = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const color = usernameColor(author);
-  const div   = document.createElement('div');
-  div.className = 'message';
-
   const choicesHtml = choices.map(c =>
     `<span class="kura-choice${winners.includes(c) ? ' kura-winner' : ''}">${escapeHtml(c)}</span>`
   ).join('');
-
   const winnersHtml = winners.map(w =>
     `<span class="kura-winner">🏆 ${escapeHtml(w)}</span>`
   ).join('');
-
-  div.innerHTML = `
-    <div class="meta">
-      <span class="name" style="color:${color}">${escapeHtml(author)}${isSelf ? ' <span class="self-tag">(sen)</span>' : ''}</span>
-      <span class="time">${time}</span>
-    </div>
-    <div class="body">
-      <div class="kura-card">
-        <div class="kura-header">🎲 Kura Çekildi</div>
-        <div class="kura-choices"><span class="kura-choices-label">Havuz:</span> ${choicesHtml}</div>
-        <div class="kura-result-row">${winners.length > 1 ? `${winners.length} Kazanan:` : 'Kazanan:'} ${winnersHtml}</div>
-      </div>
-    </div>`;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  const div = buildMessageEl(author, isSelf);
+  div.querySelector('.body').innerHTML = `<div class="kura-card">
+    <div class="kura-header">🎲 Kura Çekildi</div>
+    <div class="kura-choices"><span class="kura-choices-label">Havuz:</span> ${choicesHtml}</div>
+    <div class="kura-result-row">${winners.length > 1 ? `${winners.length} Kazanan:` : 'Kazanan:'} ${winnersHtml}</div>
+  </div>`;
+  appendMessage(div);
 }
 
 // ── Mention popup ─────────────────────────────────────────────
@@ -425,6 +416,46 @@ EMOJI_CATEGORIES.forEach((cat, idx) => {
   emojiCatBar.appendChild(btn);
 });
 
+// Emoji arama
+const emojiSearchWrap = document.createElement('div');
+emojiSearchWrap.className = 'emoji-search-wrap';
+const emojiSearchInput = document.createElement('input');
+emojiSearchInput.type = 'text';
+emojiSearchInput.placeholder = 'Emoji ara...';
+emojiSearchInput.autocomplete = 'off';
+emojiSearchWrap.appendChild(emojiSearchInput);
+
+emojiSearchInput.addEventListener('keydown', e => e.stopPropagation());
+emojiSearchInput.addEventListener('input', () => {
+  const q = emojiSearchInput.value.toLowerCase().trim();
+  if (!q) {
+    emojiCatBar.style.display = '';
+    renderEmojiGrid(0);
+    return;
+  }
+  emojiCatBar.style.display = 'none';
+  // Tüm kategorilerde ara
+  const all = EMOJI_CATEGORIES.flatMap(c => c.emojis);
+  const results = all.filter(e => {
+    try { return e.normalize('NFC').toLowerCase().includes(q); } catch { return false; }
+  });
+  emojiGrid.innerHTML = '';
+  if (!results.length) {
+    emojiGrid.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px;text-align:center">Sonuç yok</div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  results.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-btn';
+    btn.textContent = emoji;
+    btn.dataset.emoji = emoji;
+    frag.appendChild(btn);
+  });
+  emojiGrid.appendChild(frag);
+});
+
+emojiPicker.appendChild(emojiSearchWrap);
 emojiPicker.appendChild(emojiCatBar);
 emojiPicker.appendChild(emojiGrid);
 renderEmojiGrid(0);
@@ -433,7 +464,13 @@ btnEmoji.addEventListener('click', (e) => {
   e.stopPropagation();
   const willOpen = emojiPicker.classList.contains('hidden');
   emojiPicker.classList.toggle('hidden');
-  if (willOpen) gifPicker.classList.add('hidden');
+  if (willOpen) {
+    gifPicker.classList.add('hidden');
+    emojiSearchInput.value = '';
+    emojiCatBar.style.display = '';
+    renderEmojiGrid(0);
+    setTimeout(() => emojiSearchInput.focus(), 0);
+  }
 });
 
 document.addEventListener('click', (e) => {
@@ -521,16 +558,7 @@ async function loadGifs(query) {
 }
 
 function appendGifMessage(author, url, isSelf = false) {
-  const time  = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const color = usernameColor(author);
-  const div   = document.createElement('div');
-  div.className = 'message';
-  div.innerHTML = `
-    <div class="meta">
-      <span class="name" style="color:${color}">${escapeHtml(author)}${isSelf ? ' <span class="self-tag">(sen)</span>' : ''}</span>
-      <span class="time">${time}</span>
-    </div>
-    <div class="body"><img src="${escapeHtml(url)}" class="chat-gif" alt="GIF" loading="lazy" /></div>`;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  const div = buildMessageEl(author, isSelf);
+  div.querySelector('.body').innerHTML = `<img src="${escapeHtml(url)}" class="chat-gif" alt="GIF" loading="lazy" />`;
+  appendMessage(div);
 }

@@ -21,24 +21,7 @@ function scheduleReconnect() {
 }
 
 function doReconnect() {
-  // Eski peer bağlantılarını temizle (bekleyen zamanlayıcıları da iptal et)
-  peers.forEach((peerState) => {
-    if (peerState.disconnectTimer) clearTimeout(peerState.disconnectTimer);
-    peerState.pc.close();
-  });
-  peers.clear();
-  remoteAudio.forEach(el => { el.srcObject = null; });
-  remoteAudio.clear();
-  remoteGains.forEach(g => { try { g.disconnect(); } catch {} });
-  remoteGains.clear();
-  // BUG-02 & BUG-03: Ekran sesi GainNode ve volume map temizliği
-  remoteScreenGains.forEach(g => { try { g.disconnect(); } catch {} });
-  remoteScreenGains.clear();
-  remoteScreenVolumes.clear();
-  preDeafVolumes.clear();
-  [...videoTiles.keys()].filter(id => id.startsWith('remote-')).forEach(removeVideoTile);
-  document.getElementById('participants-list').innerHTML = '';
-  // Yeniden bağlan
+  cleanupAllPeers();
   connectSignaling();
 }
 

@@ -388,6 +388,41 @@ if (inputSignalUrl) {
   });
 }
 
+// ── Kamera ayarları paneli ─────────────────────────────────────
+function initCameraSettings() {
+  const savedRes = Number(localStorage.getItem('stormic_cam_width')) || 1280;
+  const savedFps = Number(localStorage.getItem('stormic_cam_fps'))   || 30;
+
+  const resGroup = document.getElementById('cam-res-group');
+  const fpsGroup = document.getElementById('cam-fps-group');
+  if (!resGroup || !fpsGroup) return;
+
+  resGroup.querySelectorAll('[data-cam-res]').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.camRes) === savedRes);
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      resGroup.querySelectorAll('[data-cam-res]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      localStorage.setItem('stormic_cam_width',  btn.dataset.camRes);
+      localStorage.setItem('stormic_cam_height', btn.dataset.camH);
+      if (vid.cameraStream) await restartCameraWithCurrentSettings();
+    });
+  });
+
+  fpsGroup.querySelectorAll('[data-cam-fps]').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.camFps) === savedFps);
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      fpsGroup.querySelectorAll('[data-cam-fps]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      localStorage.setItem('stormic_cam_fps', btn.dataset.camFps);
+      if (vid.cameraStream) await restartCameraWithCurrentSettings();
+    });
+  });
+}
+
+initCameraSettings();
+
 // Başlangıçta tuş adlarını göster
 updatePttKeyDisplay();
 updateMicKeyDisplay();

@@ -93,6 +93,18 @@
     </div>
   </div>
 
+  <!-- Kanaldan çıkış onayı -->
+  <div id="leave-confirm-overlay" class="leave-confirm-overlay hidden">
+    <div class="leave-confirm-box">
+      <div class="leave-confirm-title">Kanaldan Ayrıl</div>
+      <div class="leave-confirm-msg">Kanaldan ayrılmak istediğine emin misin?</div>
+      <div class="leave-confirm-actions">
+        <button id="btn-leave-cancel" class="btn-secondary">İptal</button>
+        <button id="btn-leave-confirm" class="btn-danger">Ayrıl</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Oda -->
   <div id="screen-room" class="screen">
     <!-- Kaynak seçici modal -->
@@ -226,6 +238,25 @@
               <span id="threshold-val" class="threshold-val">8</span>
             </div>
             <input id="range-threshold" type="range" min="3" max="30" step="1" value="8" />
+          </div>
+        </div>
+        <div class="settings-section" style="padding-top:0">
+          <div class="settings-section-title">Kamera</div>
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:4px">
+            <span class="settings-row-label">Çözünürlük</span>
+            <div class="opt-group" id="cam-res-group">
+              <button class="opt-btn" data-cam-res="854" data-cam-h="480">480p</button>
+              <button class="opt-btn active" data-cam-res="1280" data-cam-h="720">720p</button>
+              <button class="opt-btn" data-cam-res="1920" data-cam-h="1080">1080p</button>
+            </div>
+          </div>
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:4px">
+            <span class="settings-row-label">FPS</span>
+            <div class="opt-group" id="cam-fps-group">
+              <button class="opt-btn" data-cam-fps="15">15</button>
+              <button class="opt-btn active" data-cam-fps="30">30</button>
+              <button class="opt-btn" data-cam-fps="60">60</button>
+            </div>
           </div>
         </div>
         <div class="settings-section" style="padding-top:0">

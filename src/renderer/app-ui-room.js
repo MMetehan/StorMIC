@@ -8,6 +8,15 @@ const volumeVal        = document.getElementById('volume-val');
 const btnVolumeMute    = document.getElementById('btn-volume-mute');
 let   volumePopoverTarget = null;
 
+// Kalıcı ses seviyeleri: stormic_vol_<username> → 0-2 (localStorage)
+function loadPersistedVolume(username) {
+  const v = parseFloat(localStorage.getItem('stormic_vol_' + username));
+  return isNaN(v) ? 1 : Math.max(0, Math.min(2, v));
+}
+function persistVolume(username, vol) {
+  localStorage.setItem('stormic_vol_' + username, vol);
+}
+
 function openVolumePopover(username, anchorEl) {
   volumePopoverTarget = username;
   volumePopoverName.textContent = username;
@@ -34,7 +43,10 @@ volumeSlider.addEventListener('input', () => {
   volumeVal.textContent = volumeSlider.value + '%';
   btnVolumeMute.textContent = vol === 0 ? 'Sesi Aç' : 'Sustur';
   btnVolumeMute.classList.toggle('active', vol === 0);
-  if (volumePopoverTarget) setRemoteVolume(volumePopoverTarget, vol);
+  if (volumePopoverTarget) {
+    setRemoteVolume(volumePopoverTarget, vol);
+    persistVolume(volumePopoverTarget, vol);
+  }
 });
 
 btnVolumeMute.addEventListener('click', () => {
@@ -44,7 +56,10 @@ btnVolumeMute.addEventListener('click', () => {
   volumeVal.textContent = newVol + '%';
   btnVolumeMute.textContent = newVol === 0 ? 'Sesi Aç' : 'Sustur';
   btnVolumeMute.classList.toggle('active', newVol === 0);
-  if (volumePopoverTarget) setRemoteVolume(volumePopoverTarget, newVol / 100);
+  if (volumePopoverTarget) {
+    setRemoteVolume(volumePopoverTarget, newVol / 100);
+    persistVolume(volumePopoverTarget, newVol / 100);
+  }
 });
 
 document.addEventListener('click', (e) => {
@@ -67,6 +82,11 @@ function addParticipant(username, isSelf = false) {
   nameSpan.textContent = isSelf ? `${username} (sen)` : username;
   li.appendChild(nameSpan);
   if (!isSelf) {
+    // Kaydedilmiş ses seviyesini yükle
+    const savedVol = loadPersistedVolume(username);
+    if (savedVol !== 1) {
+      remoteVolumes.set(username, savedVol);
+    }
     const qualityDot = document.createElement('span');
     qualityDot.className = 'quality-dot';
     qualityDot.title = 'Bağlanıyor...';
@@ -89,6 +109,25 @@ function setSpeaking(username, active) {
   document.getElementById(`peer-${username}`)?.classList.toggle('speaking', active);
 }
 
+// ── Ortak peer/ses temizleme ──────────────────────────────────
+function cleanupAllPeers() {
+  peers.forEach((peerState) => {
+    if (peerState.disconnectTimer) clearTimeout(peerState.disconnectTimer);
+    peerState.pc.close();
+  });
+  peers.clear();
+  remoteAudio.forEach(el => { el.srcObject = null; });
+  remoteAudio.clear();
+  remoteGains.forEach(g => { try { g.disconnect(); } catch {} });
+  remoteGains.clear();
+  remoteScreenGains.forEach(g => { try { g.disconnect(); } catch {} });
+  remoteScreenGains.clear();
+  remoteScreenVolumes.clear();
+  preDeafVolumes.clear();
+  [...videoTiles.keys()].filter(id => id.startsWith('remote-')).forEach(removeVideoTile);
+  document.getElementById('participants-list').innerHTML = '';
+}
+
 // ── Oda ───────────────────────────────────────────────────────
 function enterRoom() {
   document.getElementById('room-code-display').textContent = state.channelCode;
@@ -105,24 +144,10 @@ function leaveRoom() {
   reconn.attempts = 0;
   stopPeerStats();
   deafened = false;
-  preDeafVolumes.clear();
   disableMic();
   disableCamera();
   disableScreenShare();
-  peers.forEach((peerState) => {
-    if (peerState.disconnectTimer) clearTimeout(peerState.disconnectTimer);
-    peerState.pc.close();
-  });
-  peers.clear();
-  remoteAudio.forEach(el => { el.srcObject = null; });
-  remoteAudio.clear();
-  remoteGains.forEach(g => { try { g.disconnect(); } catch {} });
-  remoteGains.clear();
-  // BUG-02 & BUG-03: Ekran sesi GainNode ve volume map temizliği
-  remoteScreenGains.forEach(g => { try { g.disconnect(); } catch {} });
-  remoteScreenGains.clear();
-  remoteScreenVolumes.clear();
-  // BUG-17: Mention popup'ı sıfırla
+  cleanupAllPeers();
   hideMentionPopup();
   [...videoTiles.keys()].forEach(removeVideoTile);
   if (state.ws) { state.ws.close(); state.ws = null; }
@@ -132,8 +157,20 @@ function leaveRoom() {
   showScreen('screen-channel');
 }
 
+// ── Çıkış onayı overlay ───────────────────────────────────────
+const leaveConfirmOverlay = document.getElementById('leave-confirm-overlay');
+
+document.getElementById('btn-leave').addEventListener('click', () => {
+  leaveConfirmOverlay.classList.remove('hidden');
+});
+document.getElementById('btn-leave-cancel').addEventListener('click', () => {
+  leaveConfirmOverlay.classList.add('hidden');
+});
+document.getElementById('btn-leave-confirm').addEventListener('click', () => {
+  leaveConfirmOverlay.classList.add('hidden');
+  leaveRoom();
+});
+
 document.getElementById('btn-copy-room-code').addEventListener('click', () => {
   copyToClipboard(state.channelCode, null);
 });
-
-document.getElementById('btn-leave').addEventListener('click', leaveRoom);

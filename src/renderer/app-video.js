@@ -102,6 +102,28 @@ function buildCameraConstraints() {
   };
 }
 
+async function restartCameraWithCurrentSettings() {
+  if (!vid.cameraStream) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(buildCameraConstraints());
+    const newTrack = stream.getVideoTracks()[0];
+    peers.forEach((peerState) => {
+      if (peerState.cameraSender) peerState.cameraSender.replaceTrack(newTrack).catch(() => {});
+    });
+    vid.cameraStream.getTracks().forEach(t => t.stop());
+    vid.cameraStream = stream;
+    vid.cameraTrack  = newTrack;
+    const tile = videoTiles.get('local-camera');
+    if (tile) tile.stream = stream;
+    const tileVideo = videoTiles.get('local-camera')?.el?.querySelector('video');
+    if (tileVideo) tileVideo.srcObject = stream;
+    if (activeSpotlightId === 'local-camera') spotlightVideo.srcObject = stream;
+    newTrack.onended = () => { disableCamera(); btnCam.classList.remove('active'); };
+  } catch {
+    appendSystemMessage('Kamera yeniden başlatılamadı.');
+  }
+}
+
 async function enableCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(buildCameraConstraints());
@@ -459,14 +481,17 @@ document.addEventListener('click', (e) => {
   if (!screenWrap.contains(e.target)) screenOptions.classList.add('hidden');
 });
 
-document.getElementById('btn-fullscreen').addEventListener('click', () => {
+function toggleFullscreen() {
   const el = document.getElementById('video-spotlight');
   if (!document.fullscreenElement) {
     el.requestFullscreen().catch(() => {});
   } else {
     document.exitFullscreen();
   }
-});
+}
+
+document.getElementById('btn-fullscreen').addEventListener('click', toggleFullscreen);
+document.getElementById('video-spotlight').addEventListener('dblclick', toggleFullscreen);
 
 // Tam ekran ses slider (içeride, fullscreen'da görünür)
 document.getElementById('screen-audio-range').addEventListener('input', function () {
