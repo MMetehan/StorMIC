@@ -4,6 +4,22 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CURRENT=$(node -e "console.log(require('$ROOT/package.json').version)")
 
+# Uncommitted değişiklik var mı?
+DIRTY=$(git -C "$ROOT" status --porcelain | grep -v '??' || true)
+if [ -n "$DIRTY" ]; then
+  echo "Commit edilmemiş değişiklikler var:"
+  git -C "$ROOT" status --short | grep -v '^??'
+  echo ""
+  printf "Bunları da release commit'ine dahil etmek ister misin? (e/H): "
+  read -r INCLUDE
+  if [[ "$INCLUDE" =~ ^[Ee]$ ]]; then
+    git -C "$ROOT" add -A
+  else
+    echo "İptal. Önce değişikliklerini commit et, sonra tekrar dene."
+    exit 1
+  fi
+fi
+
 echo "Mevcut versiyon: v$CURRENT"
 printf "Yeni versiyon    : "
 read -r NEW_VERSION
@@ -13,8 +29,13 @@ if [ -z "$NEW_VERSION" ]; then
   exit 1
 fi
 
+if [ "$NEW_VERSION" = "$CURRENT" ]; then
+  echo "Hata: Yeni versiyon mevcut versiyonla aynı (v$CURRENT). Farklı bir numara gir."
+  exit 1
+fi
+
 # package.json + package-lock.json güncelle
-npm --prefix "$ROOT" version "$NEW_VERSION" --no-git-tag-version --allow-same-version > /dev/null
+npm --prefix "$ROOT" version "$NEW_VERSION" --no-git-tag-version > /dev/null
 echo "✓ Versiyon → v$NEW_VERSION"
 
 printf "Commit mesajı (boş = 'release v$NEW_VERSION'): "
