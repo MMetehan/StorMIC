@@ -24,9 +24,11 @@ let RTC_CONFIG = {
       credential: 'openrelayproject',
     },
   ],
-  iceCandidatePoolSize: 10,   // ICE adaylarını önceden topla → daha hızlı bağlantı
-  bundlePolicy:         'max-bundle', // tüm medyayı tek bağlantı üzerinden taşı
-  rtcpMuxPolicy:        'require',    // RTCP için ayrı port açma
+  iceCandidatePoolSize: 4,    // önceden toplanacak aday sayısını sınırla
+  rtcpMuxPolicy:        'require',
+  // bundlePolicy kasıtlı olarak varsayılanda bırakıldı ('balanced').
+  // 'max-bundle' tek DTLS tüneline bağlar; ICE restart/renegotiaton
+  // sırasında SRTP context kalıcı bozulmasına yol açar.
 };
 
 /**
@@ -44,7 +46,9 @@ async function loadRtcConfig(signalUrl) {
     clearTimeout(timer);
     if (res.ok) {
       const cfg = await res.json();
-      if (Array.isArray(cfg?.iceServers) && cfg.iceServers.length) {
+      // BUG-16: İçerik doğrulaması — her sunucuda urls alanı olmalı
+      if (Array.isArray(cfg?.iceServers) && cfg.iceServers.length &&
+          cfg.iceServers.every(s => s && (Array.isArray(s.urls) ? s.urls.length : s.urls))) {
         RTC_CONFIG = { ...RTC_CONFIG, iceServers: cfg.iceServers };
       }
     }

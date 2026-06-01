@@ -75,11 +75,15 @@ ipcMain.on('window-maximize', () => {
 ipcMain.on('window-close', () => mainWindow.close());
 
 // Ekran kaynağı listesi (pencere seçici için)
+// BUG-30: getSources timeout yok — IPC asılı kalabilir; 8 sn timeout eklendi
 ipcMain.handle('desktop-capturer-sources', async () => {
-  const sources = await desktopCapturer.getSources({
-    types: ['screen', 'window'],
-    thumbnailSize: { width: 280, height: 158 },
-  });
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('getSources timeout')), 8000)
+  );
+  const sources = await Promise.race([
+    desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 280, height: 158 } }),
+    timeout,
+  ]);
   return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }));
 });
 

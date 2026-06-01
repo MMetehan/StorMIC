@@ -19,7 +19,7 @@ const mic = {
   audioCtx:       null,
   speakTimer:     null,
   isSpeaking:     false,
-  speakThreshold: Number(localStorage.getItem('stormic_speak_threshold') || 8),
+  speakThreshold: Math.min(30, Math.max(1, Number(localStorage.getItem('stormic_speak_threshold') || 8))),
 };
 
 // username -> HTMLAudioElement (uzak ses)
@@ -30,6 +30,12 @@ const remoteGains = new Map();
 
 // username -> 0-2 (2.0 = %200)
 const remoteVolumes = new Map();
+
+// "username-screen" -> GainNode (ekran paylaşım sesi için Web Audio zinciri)
+const remoteScreenGains = new Map();
+
+// "username-screen" -> 0-2 (ekran paylaşım ses seviyesi)
+const remoteScreenVolumes = new Map();
 
 let _sharedAudioCtx = null;
 function sharedAudioContext() {

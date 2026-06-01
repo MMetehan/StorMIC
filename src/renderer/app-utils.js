@@ -8,9 +8,18 @@ function usernameColor(username) {
 }
 
 // ── Ses efekti ────────────────────────────────────────────────
+// BUG-06: Her çağrıda yeni AudioContext yaratmak kaynak sızdırır.
+// Tek kalıcı context paylaşılır; kapatılmaz.
+let _soundCtx = null;
+function _getSoundCtx() {
+  if (!_soundCtx || _soundCtx.state === 'closed') _soundCtx = new AudioContext();
+  if (_soundCtx.state === 'suspended') _soundCtx.resume().catch(() => {});
+  return _soundCtx;
+}
+
 function playSound(type) {
   try {
-    const ctx = new AudioContext();
+    const ctx = _getSoundCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -64,7 +73,7 @@ function playSound(type) {
       osc.frequency.setValueAtTime(1200, t + 0.18);
       osc.start(t); osc.stop(t + 0.4);
     }
-    osc.onended = () => ctx.close();
+    // context paylaşıldığı için kapatılmaz
   } catch {}
 }
 

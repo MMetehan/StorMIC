@@ -493,7 +493,9 @@ async function loadGifs(query) {
       gifGrid.appendChild(item);
     });
   } catch {
-    gifGrid.innerHTML = '<div class="gif-status">Yüklenemedi.</div>';
+    // BUG-27: Sadece hata mesajı yerine retry seçeneği sun
+    gifGrid.innerHTML = '<div class="gif-status">Yüklenemedi. <button class="gif-retry-btn">Tekrar Dene</button></div>';
+    gifGrid.querySelector('.gif-retry-btn')?.addEventListener('click', () => loadGifs(query));
   }
 }
 

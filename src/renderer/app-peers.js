@@ -34,7 +34,8 @@ function createPeerConnection(remoteUsername, initiator) {
   const peerState = {
     pc, dc: null, incoming: null, initiator, makingOffer: false,
     cameraSender: null, screenSender: null, screenAudioSender: null,
-    disconnectTimer: null,
+    disconnectTimer: null, iceRestarted: false, // BUG-22: explicit init
+    pendingCandidates: null,                    // BUG-11: ICE buffer
   };
   peers.set(remoteUsername, peerState);
 
@@ -122,10 +123,14 @@ function createPeerConnection(remoteUsername, initiator) {
     const audioEl = remoteAudio.get(username);
     if (audioEl) { audioEl.srcObject = null; audioEl.remove(); }
     remoteAudio.delete(username);
+    remoteVolumes.delete(username);
+    // BUG-02 & BUG-03: Ekran sesi GainNode ve volume map temizliği
     const screenKey = `${username}-screen`;
     const screenEl = remoteAudio.get(screenKey);
     if (screenEl) { screenEl.srcObject = null; }
     remoteAudio.delete(screenKey);
+    cleanupScreenGainNode(screenKey);
+    remoteScreenVolumes.delete(screenKey);
     [...videoTiles.keys()]
       .filter(id => id.startsWith(`remote-${username}-`))
       .forEach(removeVideoTile);
@@ -233,21 +238,43 @@ function handleSignal({ from, data }) {
             peer.makingOffer = false;
           }
           await pc.setRemoteDescription(data.sdp);
+          // BUG-11: Offer SDP'si işlendikten sonra buffer'lanmış ICE adaylarını flush et
+          if (peer.pendingCandidates?.length) {
+            peer.pendingCandidates.forEach(c => pc.addIceCandidate(c).catch(() => {}));
+            peer.pendingCandidates = null;
+          }
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           sendSignal(from, { type: 'answer', sdp: pc.localDescription });
-        } catch {}
+        } catch (e) {
+          // BUG-05: Hata durumunda makingOffer takılı kalmasın
+          peer.makingOffer = false;
+        }
       })();
       break;
     }
     case 'answer': {
       const peer = peers.get(from);
-      if (peer) peer.pc.setRemoteDescription(data.sdp);
+      if (!peer) break;
+      peer.pc.setRemoteDescription(data.sdp).then(() => {
+        // BUG-11: Buffer'lanmış ICE adaylarını temizle
+        if (peer.pendingCandidates?.length) {
+          peer.pendingCandidates.forEach(c => peer.pc.addIceCandidate(c).catch(() => {}));
+          peer.pendingCandidates = null;
+        }
+      }).catch(() => {});
       break;
     }
     case 'ice': {
       const peer = peers.get(from);
-      if (peer) peer.pc.addIceCandidate(data.candidate).catch(() => {});
+      if (!peer) break;
+      // BUG-11: Remote SDP henüz gelmemişse adayı buffer'la
+      if (peer.pc.remoteDescription) {
+        peer.pc.addIceCandidate(data.candidate).catch(() => {});
+      } else {
+        if (!peer.pendingCandidates) peer.pendingCandidates = [];
+        peer.pendingCandidates.push(data.candidate);
+      }
       break;
     }
   }
@@ -299,7 +326,9 @@ function handleControlMessage(msg, from) {
       const screenKey = `${from}-screen`;
       const el = remoteAudio.get(screenKey);
       if (el) { el.srcObject = null; remoteAudio.delete(screenKey); }
+      cleanupScreenGainNode(screenKey); // BUG-02: GainNode temizle
       updateScreenAudioVol();
+      updateStreamVolOverlay();
       break;
     }
     case 'file-meta': {

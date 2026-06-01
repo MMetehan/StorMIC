@@ -66,12 +66,24 @@ function resolveScreenAudio(peer, remoteUsername) {
   audioEl.autoplay = true;
   remoteAudio.set(screenKey, audioEl);
   audioEl.srcObject = pending.stream;
+  // Kaydedilmiş ses seviyesini uygula
+  const savedVol = remoteScreenVolumes.get(screenKey) ?? 1;
+  if (deafened) {
+    audioEl.volume = 0;
+  } else if (savedVol > 1) {
+    ensureScreenGainNode(screenKey, audioEl);
+  } else {
+    audioEl.volume = Math.max(0, Math.min(1, savedVol));
+  }
   updateScreenAudioVol();
+  updateStreamVolOverlay();
   pending.track.onended = () => {
     if (remoteAudio.get(screenKey) === audioEl) {
       audioEl.srcObject = null;
       remoteAudio.delete(screenKey);
+      cleanupScreenGainNode(screenKey);
       updateScreenAudioVol();
+      updateStreamVolOverlay();
     }
   };
 }
@@ -122,6 +134,14 @@ async function enableCamera() {
 
 function disableCamera() {
   if (!vid.cameraStream) return;
+  // Sender'ı kaldır ve null'a çek: tekrar açılınca addTrack() kullanılsın.
+  // replaceTrack() karşı tarafta ontrack tetiklemez → 2. açılışta tile oluşmaz.
+  peers.forEach((peerState) => {
+    if (peerState.cameraSender) {
+      try { peerState.pc.removeTrack(peerState.cameraSender); } catch {}
+      peerState.cameraSender = null;
+    }
+  });
   vid.cameraStream.getTracks().forEach(t => t.stop());
   vid.cameraStream = null;
   vid.cameraTrack  = null;
@@ -242,6 +262,18 @@ async function enableScreenShare() {
 function disableScreenShare() {
   if (!vid.screenStream) return;
   const hadAudio = vid.screenAudioTrack !== null;
+  // Sender'ları kaldır ve null'a çek: tekrar açılınca addTrack() kullanılsın.
+  // replaceTrack() karşı tarafta ontrack tetiklemez → 2. açılışta yayın görünmez.
+  peers.forEach((peerState) => {
+    if (peerState.screenSender) {
+      try { peerState.pc.removeTrack(peerState.screenSender); } catch {}
+      peerState.screenSender = null;
+    }
+    if (peerState.screenAudioSender) {
+      try { peerState.pc.removeTrack(peerState.screenAudioSender); } catch {}
+      peerState.screenAudioSender = null;
+    }
+  });
   vid.screenStream.getTracks().forEach(t => t.stop());
   vid.screenStream     = null;
   vid.screenTrack      = null;
@@ -313,44 +345,34 @@ function updateStripVisibility() {
 function updateScreenAudioVol() {
   const volBar = document.getElementById('screen-audio-vol');
   if (!volBar) return;
-  // activeSpotlightId format: "remote-{username}-screen"
-  // remoteAudio key format:   "{username}-screen"
+  // activeSpotlightId: "remote-{username}-screen" → screenKey: "{username}-screen"
   const isRemoteScreen = activeSpotlightId?.startsWith('remote-') && activeSpotlightId?.endsWith('-screen');
   const screenKey = isRemoteScreen ? activeSpotlightId.slice('remote-'.length) : null;
-  const active = !!(screenKey && remoteAudio.has(screenKey));
-  volBar.classList.toggle('hidden', !active);
-  if (active) {
-    const el  = remoteAudio.get(screenKey);
-    const vol = Math.round((el?.volume ?? 1) * 100);
-    document.getElementById('screen-audio-range').value = vol;
-    document.getElementById('screen-audio-val').textContent = `${vol}%`;
+  volBar.classList.toggle('hidden', !isRemoteScreen);
+  if (isRemoteScreen && screenKey) {
+    const vol = remoteScreenVolumes.get(screenKey) ?? 1;
+    const pct = Math.round(vol * 100);
+    document.getElementById('screen-audio-range').value = Math.min(200, pct);
+    document.getElementById('screen-audio-val').textContent = `${pct}%`;
   }
 }
 
-// ── Yayın ses seviyesi overlay (izleyici için) ────────────────
-function getStreamVolUsername() {
-  if (!activeSpotlightId?.startsWith('remote-')) return null;
-  // format: remote-{username}-{camera|screen}
-  const withoutPrefix = activeSpotlightId.slice('remote-'.length);
-  const lastDash = withoutPrefix.lastIndexOf('-');
-  return lastDash === -1 ? null : withoutPrefix.slice(0, lastDash);
-}
-
+// ── Yayın ses seviyesi overlay (hover, küçük ekran) ──────────
 function updateStreamVolOverlay() {
   const overlay = document.getElementById('stream-vol-overlay');
   if (!overlay) return;
-  const username = getStreamVolUsername();
-  if (!username) {
-    overlay.classList.add('hidden');
-    return;
+  // Yalnızca uzak ekran paylaşımlarında göster (kamera değil)
+  const isRemoteScreen = activeSpotlightId?.startsWith('remote-') && activeSpotlightId?.endsWith('-screen');
+  overlay.classList.toggle('hidden', !isRemoteScreen);
+  if (isRemoteScreen) {
+    const screenKey = activeSpotlightId.slice('remote-'.length);
+    const vol = remoteScreenVolumes.get(screenKey) ?? 1;
+    const pct = Math.round(vol * 100);
+    const range = document.getElementById('stream-vol-range');
+    const val   = document.getElementById('stream-vol-val');
+    if (range) range.value = Math.min(200, pct);
+    if (val)   val.textContent = pct + '%';
   }
-  overlay.classList.remove('hidden');
-  const vol = remoteVolumes.get(username) ?? 1;
-  const pct = Math.round(vol * 100);
-  const range = document.getElementById('stream-vol-range');
-  const val   = document.getElementById('stream-vol-val');
-  if (range) range.value = Math.min(200, pct);
-  if (val)   val.textContent = pct + '%';
 }
 
 // ── Event listeners ───────────────────────────────────────────
@@ -446,24 +468,35 @@ document.getElementById('btn-fullscreen').addEventListener('click', () => {
   }
 });
 
+// Tam ekran ses slider (içeride, fullscreen'da görünür)
 document.getElementById('screen-audio-range').addEventListener('input', function () {
-  const v = parseInt(this.value, 10);
-  document.getElementById('screen-audio-val').textContent = `${v}%`;
+  const pct = parseInt(this.value, 10);
+  document.getElementById('screen-audio-val').textContent = `${pct}%`;
+  // Hover overlay ile senkronize et
+  const rangeHover = document.getElementById('stream-vol-range');
+  const valHover   = document.getElementById('stream-vol-val');
+  if (rangeHover) rangeHover.value = pct;
+  if (valHover)   valHover.textContent = pct + '%';
   const isRemoteScreen = activeSpotlightId?.startsWith('remote-') && activeSpotlightId?.endsWith('-screen');
   if (isRemoteScreen) {
-    const screenKey = activeSpotlightId.slice('remote-'.length);
-    const el = remoteAudio.get(screenKey);
-    if (el) el.volume = v / 100;
+    setScreenAudioVolume(activeSpotlightId.slice('remote-'.length), pct / 100);
   }
 });
 
-// Yayın ses seviyesi overlay slider
+// Hover overlay ses slider (küçük ekranda görünür)
 document.getElementById('stream-vol-range')?.addEventListener('input', function () {
   const pct = Number(this.value);
   const valEl = document.getElementById('stream-vol-val');
   if (valEl) valEl.textContent = pct + '%';
-  const username = getStreamVolUsername();
-  if (username) setRemoteVolume(username, pct / 100);
+  // Tam ekran slider ile senkronize et
+  const rangeFull = document.getElementById('screen-audio-range');
+  const valFull   = document.getElementById('screen-audio-val');
+  if (rangeFull) rangeFull.value = pct;
+  if (valFull)   valFull.textContent = pct + '%';
+  const isRemoteScreen = activeSpotlightId?.startsWith('remote-') && activeSpotlightId?.endsWith('-screen');
+  if (isRemoteScreen) {
+    setScreenAudioVolume(activeSpotlightId.slice('remote-'.length), pct / 100);
+  }
 });
 
 btnMirror.addEventListener('click', () => {

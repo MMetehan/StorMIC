@@ -20,7 +20,8 @@ function getAudioConstraints() {
 function applyDeafState() {
   if (deafened) {
     remoteAudio.forEach((el, key) => {
-      const gain = remoteGains.get(key);
+      const isScreen = key.endsWith('-screen');
+      const gain = isScreen ? remoteScreenGains.get(key) : remoteGains.get(key);
       if (gain) {
         preDeafVolumes.set(key, gain.gain.value);
         gain.gain.value = 0;
@@ -31,8 +32,10 @@ function applyDeafState() {
     });
   } else {
     remoteAudio.forEach((el, key) => {
-      const saved = preDeafVolumes.get(key) ?? (remoteVolumes.get(key) ?? 1);
-      const gain = remoteGains.get(key);
+      const isScreen = key.endsWith('-screen');
+      const volMap = isScreen ? remoteScreenVolumes : remoteVolumes;
+      const saved  = preDeafVolumes.get(key) ?? (volMap.get(key) ?? 1);
+      const gain   = isScreen ? remoteScreenGains.get(key) : remoteGains.get(key);
       if (gain) {
         gain.gain.value = Math.max(0, saved);
       } else {
@@ -52,6 +55,8 @@ function setDeafened(val) {
       btnMic.classList.remove('active');
       btnMic.textContent = '🔇 Mikrofon';
     }
+    // BUG-28: PTT basılıyken sağırlaşılınca ptt-active class'ı kalırdı
+    btnPtt.classList.remove('ptt-active');
     btnPtt.disabled = true;
     btnMic.disabled = true;
     btnDeaf.classList.add('deaf-active');
@@ -81,6 +86,42 @@ function setRemoteVolume(username, vol) {
   }
 }
 
+// ── Ekran paylaşım ses seviyesi ───────────────────────────────
+function ensureScreenGainNode(screenKey, audioEl) {
+  if (remoteScreenGains.has(screenKey)) return remoteScreenGains.get(screenKey);
+  const ctx  = sharedAudioContext();
+  const src  = ctx.createMediaElementSource(audioEl);
+  const gain = ctx.createGain();
+  gain.gain.value = Math.max(0, remoteScreenVolumes.get(screenKey) ?? 1);
+  src.connect(gain);
+  gain.connect(ctx.destination);
+  audioEl.volume = 1;
+  remoteScreenGains.set(screenKey, gain);
+  return gain;
+}
+
+function cleanupScreenGainNode(screenKey) {
+  const gain = remoteScreenGains.get(screenKey);
+  if (gain) {
+    try { gain.disconnect(); } catch {}
+    remoteScreenGains.delete(screenKey);
+  }
+}
+
+function setScreenAudioVolume(screenKey, vol) {
+  remoteScreenVolumes.set(screenKey, vol);
+  if (deafened) return; // deaf modda sadece kaydet
+  const el = remoteAudio.get(screenKey);
+  if (!el) return;
+  if (vol > 1) ensureScreenGainNode(screenKey, el);
+  const gain = remoteScreenGains.get(screenKey);
+  if (gain) {
+    gain.gain.value = Math.max(0, vol);
+  } else {
+    el.volume = Math.max(0, Math.min(1, vol));
+  }
+}
+
 // ── Mikrofon yönetimi ─────────────────────────────────────────
 async function enableMic() {
   if (mic.stream) return;
@@ -95,9 +136,13 @@ async function enableMic() {
       // Daha önce eklenmiş audio sender varsa replaceTrack kullan.
       // addTrack çağrılırsa her enable/disable döngüsünde yeni bir sender
       // eklenir → çift ses kanalı → renegotiation bozulması → ses gitmiyor.
-      const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio');
+      // screenAudioSender HARIÇ tutulur: ekran sesi kanalına mic track yazılmasın.
+      const existingSender = pc.getSenders().find(
+        s => s.track?.kind === 'audio' && s !== peerState.screenAudioSender
+      );
       if (existingSender) {
-        existingSender.replaceTrack(mic.track);
+        // BUG-04: replaceTrack Promise'i yakalanmazsa unhandled rejection
+        existingSender.replaceTrack(mic.track).catch(() => {});
       } else {
         const sender = pc.addTrack(mic.track, stream);
         setAudioCodecPreference(pc, sender); // Opus tercihini belirt
@@ -138,9 +183,14 @@ async function restartMicWithCurrentSettings() {
     const newStream = await navigator.mediaDevices.getUserMedia({ audio: getAudioConstraints(), video: false });
     const newTrack  = newStream.getAudioTracks()[0];
     newTrack.enabled = wasEnabled;
-    peers.forEach(({ pc }) => {
-      const sender = pc.getSenders().find(s => s.track?.kind === 'audio');
-      if (sender) sender.replaceTrack(newTrack);
+    peers.forEach((peerState) => {
+      const { pc } = peerState;
+      // screenAudioSender hariç: ekran sesi kanalına dokunma
+      const sender = pc.getSenders().find(
+        s => s.track?.kind === 'audio' && s !== peerState.screenAudioSender
+      );
+      // BUG-04: replaceTrack Promise'i yakala
+      if (sender) sender.replaceTrack(newTrack).catch(() => {});
       else        pc.addTrack(newTrack, newStream);
     });
     if (mic.speakTimer) { clearInterval(mic.speakTimer); mic.speakTimer = null; }

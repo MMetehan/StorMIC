@@ -6,10 +6,14 @@
 //        | { type: 'mouse', button: 3, label: 'Fare Geri' }
 const DEFAULT_PTT = { type: 'key', code: 'Space', label: 'Boşluk' };
 
-let pttBinding = (() => {
-  try { return JSON.parse(localStorage.getItem('stormic_ptt')) || DEFAULT_PTT; }
-  catch { return DEFAULT_PTT; }
-})();
+// BUG-21: Parse başarılı ama yanlış tip dönebilir — tip kontrolü eklendi
+function _loadBinding(key, def) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return (v && typeof v === 'object' && v.type && v.label) ? v : def;
+  } catch { return def; }
+}
+let pttBinding = _loadBinding('stormic_ptt', DEFAULT_PTT);
 
 function savePttBinding(binding) {
   pttBinding = binding;
@@ -45,10 +49,7 @@ function mouseButtonLabel(button) {
 }
 
 // ── Mikrofon tuş ataması ──────────────────────────────────────
-let micToggleBinding = (() => {
-  try { return JSON.parse(localStorage.getItem('stormic_mic_toggle')) || null; }
-  catch { return null; }
-})();
+let micToggleBinding = _loadBinding('stormic_mic_toggle', null);
 
 function saveMicToggleBinding(binding) {
   micToggleBinding = binding;
@@ -211,8 +212,10 @@ btnMic.addEventListener('click', async () => {
     if (!mic.stream) {
       const ok = await enableMic();
       if (!ok) return;
-      // Async bekleyiş sırasında kullanıcı sağırlaşmış olabilir
-      if (deafened) return;
+      // BUG-01: getUserMedia beklenmesi sırasında kullanıcı sağırlaşmış olabilir.
+      // Bu durumda enableMic() stream'i açmış ama mode 'off' kalmış olur → kaynak sızar.
+      // disableMic() ile stream kapatılır.
+      if (deafened) { disableMic(); return; }
     }
     mic.mode = 'open';
     setMicEnabled(true);
@@ -229,8 +232,8 @@ async function activatePtt() {
   if (!mic.stream) {
     const ok = await enableMic();
     if (!ok) return;
-    // Async bekleyiş sırasında durum değişmiş olabilir (örn. kullanıcı sağırlaştı)
-    if (mic.mode !== 'off' || deafened) return;
+    // BUG-01: Async bekleyiş sırasında durum değişmiş olabilir (örn. kullanıcı sağırlaştı)
+    if (mic.mode !== 'off' || deafened) { disableMic(); return; }
     mic.mode = 'ptt';
   }
   setMicEnabled(true);

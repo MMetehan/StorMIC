@@ -11,11 +11,18 @@
 </head>
 <body>
 
-  <!-- Güncelleme bildirimi -->
-  <div id="update-banner" class="update-banner hidden">
-    <span id="update-msg">Güncelleme indiriliyor...</span>
-    <button id="btn-install-update" class="update-install hidden">Yeniden başlat &amp; güncelle</button>
-    <button id="btn-dismiss-update" class="update-dismiss">&#x2715;</button>
+  <!-- Güncelleme tam ekran overlay -->
+  <div id="update-overlay" class="update-overlay hidden">
+    <div class="update-overlay-box">
+      <div class="update-overlay-logo">StorMIC</div>
+      <div class="update-overlay-title">Yeni Güncelleme Mevcut</div>
+      <div id="update-overlay-msg" class="update-overlay-msg">Güncelleme indiriliyor...</div>
+      <div id="update-spinner" class="update-spinner"></div>
+      <div id="update-actions" class="update-actions hidden">
+        <button id="btn-install-now" class="btn-primary update-btn-install">Şimdi Yeniden Başlat</button>
+        <button id="btn-install-later" class="update-btn-later">Sonra Yükle (Uygulama kapanırken)</button>
+      </div>
+    </div>
   </div>
 
   <!-- Titlebar -->
@@ -107,13 +114,6 @@
       <div class="drop-label">Dosyayı bırak</div>
     </div>
 
-    <!-- Yayın ses seviyesi overlay (yalnızca izleyiciler için) -->
-    <div id="stream-vol-overlay" class="stream-vol-overlay hidden">
-      <span class="stream-vol-icon">🔊</span>
-      <input id="stream-vol-range" type="range" min="0" max="200" step="5" value="100" />
-      <span id="stream-vol-val" class="stream-vol-val">100%</span>
-    </div>
-
     <div class="room-layout">
       <aside class="sidebar">
         <div class="channel-info">
@@ -142,9 +142,16 @@
           <div id="video-spotlight" class="video-spotlight">
             <video id="spotlight-video" autoplay playsinline></video>
             <div id="spotlight-label" class="spotlight-label"></div>
+            <!-- Hover ses overlay (küçük ekran) -->
+            <div id="stream-vol-overlay" class="stream-vol-overlay hidden">
+              <span class="stream-vol-icon">&#x1F50A;</span>
+              <input id="stream-vol-range" type="range" min="0" max="200" step="5" value="100" />
+              <span id="stream-vol-val" class="stream-vol-val">100%</span>
+            </div>
+            <!-- Tam ekran ses overlay (fullscreen'da görünür) -->
             <div id="screen-audio-vol" class="screen-audio-vol hidden">
               <span>&#x1F50A;</span>
-              <input id="screen-audio-range" type="range" min="0" max="100" step="5" value="100" />
+              <input id="screen-audio-range" type="range" min="0" max="200" step="5" value="100" />
               <span id="screen-audio-val" class="screen-audio-pct">100%</span>
             </div>
             <button id="btn-fullscreen" class="btn-fullscreen" title="Tam ekran">&#x26F6;</button>

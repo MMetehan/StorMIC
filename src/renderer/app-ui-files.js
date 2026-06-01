@@ -9,13 +9,22 @@ async function sendChunked(dc, buffer, done) {
     if (dc.readyState !== 'open') return;
     // Tamponu taşıyorsa boşalmasını bekle (backpressure)
     if (dc.bufferedAmount > SEND_BUFFER_HIGH) {
+      // BUG-19: DC kapanırsa onbufferedamountlow hiç tetiklenmez → promise asılı kalır.
+      // 'close' event'i de dinleyerek promise'i çözüme kavuştur.
       await new Promise(resolve => {
         dc.bufferedAmountLowThreshold = SEND_BUFFER_LOW;
-        dc.onbufferedamountlow = () => { dc.onbufferedamountlow = null; resolve(); };
+        const cleanup = () => {
+          dc.onbufferedamountlow = null;
+          dc.removeEventListener('close', cleanup);
+          resolve();
+        };
+        dc.onbufferedamountlow = cleanup;
+        dc.addEventListener('close', cleanup);
       });
       if (dc.readyState !== 'open') return;
     }
-    dc.send(buffer.slice(offset, offset + CHUNK_SIZE));
+    // BUG-08: readyState kontrolü ile send arasında güvenlik için try/catch
+    try { dc.send(buffer.slice(offset, offset + CHUNK_SIZE)); } catch { return; }
   }
   if (dc.readyState === 'open') dc.send(done);
 }
@@ -128,22 +137,26 @@ dropOverlay.addEventListener('drop', e => {
 
 // ── Otomatik güncelleme bildirimi ─────────────────────────────
 if (window.electron?.onUpdateStatus) {
-  const updateBanner  = document.getElementById('update-banner');
-  const updateMsg     = document.getElementById('update-msg');
-  const btnInstall    = document.getElementById('btn-install-update');
-  const btnDismiss    = document.getElementById('btn-dismiss-update');
+  const overlay   = document.getElementById('update-overlay');
+  const msg       = document.getElementById('update-overlay-msg');
+  const spinner   = document.getElementById('update-spinner');
+  const actions   = document.getElementById('update-actions');
+  const btnNow    = document.getElementById('btn-install-now');
+  const btnLater  = document.getElementById('btn-install-later');
 
   window.electron.onUpdateStatus(status => {
-    updateBanner.classList.remove('hidden');
+    overlay.classList.remove('hidden');
     if (status === 'downloading') {
-      updateMsg.textContent = 'Güncelleme indiriliyor...';
-      btnInstall.classList.add('hidden');
+      msg.textContent = 'Güncelleme indiriliyor, lütfen bekleyin...';
+      spinner.classList.remove('hidden');
+      actions.classList.add('hidden');
     } else if (status === 'ready') {
-      updateMsg.textContent = 'Yeni sürüm hazır!';
-      btnInstall.classList.remove('hidden');
+      msg.textContent = 'Güncelleme hazır!';
+      spinner.classList.add('hidden');
+      actions.classList.remove('hidden');
     }
   });
 
-  btnInstall.addEventListener('click', () => window.electron.installUpdate());
-  btnDismiss.addEventListener('click', () => updateBanner.classList.add('hidden'));
+  btnNow.addEventListener('click', () => window.electron.installUpdate());
+  btnLater.addEventListener('click', () => overlay.classList.add('hidden'));
 }

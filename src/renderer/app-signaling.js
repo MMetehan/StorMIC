@@ -31,6 +31,10 @@ function doReconnect() {
   remoteAudio.clear();
   remoteGains.forEach(g => { try { g.disconnect(); } catch {} });
   remoteGains.clear();
+  // BUG-02 & BUG-03: Ekran sesi GainNode ve volume map temizliği
+  remoteScreenGains.forEach(g => { try { g.disconnect(); } catch {} });
+  remoteScreenGains.clear();
+  remoteScreenVolumes.clear();
   preDeafVolumes.clear();
   [...videoTiles.keys()].filter(id => id.startsWith('remote-')).forEach(removeVideoTile);
   document.getElementById('participants-list').innerHTML = '';
@@ -106,6 +110,9 @@ function connectSignaling() {
         remoteAudio.delete(leftScreenKey);
         remoteVolumes.delete(msg.username);
         cleanupRemoteGain(msg.username);
+        // BUG-02 & BUG-03: Ekran sesi GainNode + volume temizliği
+        cleanupScreenGainNode(leftScreenKey);
+        remoteScreenVolumes.delete(leftScreenKey);
         updateScreenAudioVol();
         [...videoTiles.keys()]
           .filter(id => id.startsWith(`remote-${msg.username}-`))

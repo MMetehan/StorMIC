@@ -119,6 +119,12 @@ function leaveRoom() {
   remoteAudio.clear();
   remoteGains.forEach(g => { try { g.disconnect(); } catch {} });
   remoteGains.clear();
+  // BUG-02 & BUG-03: Ekran sesi GainNode ve volume map temizliği
+  remoteScreenGains.forEach(g => { try { g.disconnect(); } catch {} });
+  remoteScreenGains.clear();
+  remoteScreenVolumes.clear();
+  // BUG-17: Mention popup'ı sıfırla
+  hideMentionPopup();
   [...videoTiles.keys()].forEach(removeVideoTile);
   if (state.ws) { state.ws.close(); state.ws = null; }
   state.channelCode = null;
