@@ -1,6 +1,6 @@
 {
   "name": "stormic",
-  "version": "2.1.3",
+  "version": "2.2.5",
   "description": "Minimal P2P voice and chat app",
   "main": "src/main.js",
   "scripts": {
