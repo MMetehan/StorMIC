@@ -79,7 +79,8 @@
     "publish": {
       "provider": "github",
       "owner": "MMetehan",
-      "repo": "StorMIC"
+      "repo": "StorMIC",
+      "draft": false
     }
   },
   "devDependencies": {
